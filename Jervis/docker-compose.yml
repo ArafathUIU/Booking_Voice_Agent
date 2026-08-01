@@ -1,0 +1,144 @@
+services:
+  api:
+    build: ./backend
+    container_name: jervis-api
+
+    ports:
+      - "8001:8000"
+
+    environment:
+      DATABASE_URL: postgresql+asyncpg://user:pass@db:5432/voiceagent
+      REDIS_URL: redis://redis:6379
+      CLINIC_TIMEZONE: ${CLINIC_TIMEZONE:-Asia/Dhaka}
+
+      # Internal Docker communication
+      LIVEKIT_URL: http://livekit:7880
+
+      # Browser connection (change this after starting ngrok)
+      LIVEKIT_PUBLIC_URL: ws://localhost:7890
+
+      LIVEKIT_API_KEY: devkey
+      LIVEKIT_API_SECRET: secret
+
+      GROQ_API_KEY: ${GROQ_API_KEY}
+
+      # Outbound telephony (Twilio Programmable Voice + Media Streams)
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER:-}
+      TWILIO_VERIFIED_NUMBER: ${TWILIO_VERIFIED_NUMBER:-}
+      TWILIO_PUBLIC_BASE_URL: ${TWILIO_PUBLIC_BASE_URL:-}
+
+      # Legacy LiveKit SIP outbound (requires Twilio upgrade, kept for future)
+      SIP_TRUNK_ID: ${SIP_TRUNK_ID:-}
+      SIP_TRUNK_HOSTNAME: ${SIP_TRUNK_HOSTNAME:-}
+      SIP_TRUNK_AUTH_USERNAME: ${SIP_TRUNK_AUTH_USERNAME:-}
+      SIP_TRUNK_AUTH_PASSWORD: ${SIP_TRUNK_AUTH_PASSWORD:-}
+      SIP_FROM_NUMBER: ${SIP_FROM_NUMBER:-}
+      SIP_RINGING_TIMEOUT: ${SIP_RINGING_TIMEOUT:-45}
+      SIP_MAX_CALL_DURATION: ${SIP_MAX_CALL_DURATION:-900}
+      SIP_AGENT_JOIN_TIMEOUT: ${SIP_AGENT_JOIN_TIMEOUT:-45}
+      OUTBOUND_POLL_INTERVAL: ${OUTBOUND_POLL_INTERVAL:-5}
+      OUTBOUND_RETRY_SECONDS: ${OUTBOUND_RETRY_SECONDS:-600}
+      OUTBOUND_MAX_ATTEMPTS: ${OUTBOUND_MAX_ATTEMPTS:-3}
+      OUTBOUND_CALLER: ${OUTBOUND_CALLER:-true}
+
+    volumes:
+      - ./backend:/app
+
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      livekit:
+        condition: service_started
+
+    restart: unless-stopped
+
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: jervis-db
+
+    environment:
+      POSTGRES_DB: voiceagent
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: pass
+
+    ports:
+      - "5434:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/../init-vector-db.sql:/docker-entrypoint-initdb.d/init-vector-db.sql
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d voiceagent"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: jervis-redis
+
+    ports:
+      - "6382:6379"
+
+    volumes:
+      - redis_data:/data
+
+    restart: unless-stopped
+
+  livekit:
+    image: livekit/livekit-server:latest
+    container_name: jervis-livekit
+
+    ports:
+      - "7890:7880"
+      - "7891:7881"
+      - "7882:7882/udp"
+
+    command: >
+      --dev
+      --bind 0.0.0.0
+      --udp-port 7882
+      --rtc.enable_loopback_candidate
+
+    restart: unless-stopped
+
+  # Bridges LiveKit rooms to the phone network (outbound calls via Twilio).
+  # NOTE: for live calls Twilio's trunk must be able to reach this service
+  # (public IP + UDP 5060/10000-10100, or an IP ACL). See telephony_outbound.md.
+  livekit-sip:
+    image: livekit/sip:latest
+    container_name: jervis-livekit-sip
+
+    environment:
+      SIP_CONFIG_BODY: |
+        api_key: devkey
+        api_secret: secret
+        ws_url: ws://livekit:7880
+        redis:
+          address: redis:6379
+        sip_port: 5060
+        rtp_port: 10000-10100
+        use_external_ip: true
+
+    ports:
+      - "5060:5060/udp"
+      - "10000-10100:10000-10100/udp"
+
+    depends_on:
+      livekit:
+        condition: service_started
+      redis:
+        condition: service_started
+
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
