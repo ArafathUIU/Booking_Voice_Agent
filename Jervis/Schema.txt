@@ -1,0 +1,462 @@
+// ============================================================
+// Production Multi-Tenant AI Voice Agent SaaS
+// DBML Format (dbdiagram.io)
+// ============================================================
+Table tenants {
+  id uuid [pk, default: `gen_random_uuid()`]
+  name varchar
+  slug varchar [unique]
+  email varchar
+  phone varchar
+  timezone varchar [default: 'UTC']
+  status varchar [default: 'active']
+  agent_name varchar [default: 'AI Assistant']
+  agent_role varchar [default: 'Booking Assistant']
+  default_calendar_id uuid
+  deleted_at timestamp [null]
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+}
+
+Table tenant_settings {
+  id uuid [pk, default: `gen_random_uuid()`]
+  tenant_id uuid [not null]
+  slot_duration_minutes integer [default: 30]
+  advance_booking_days integer [default: 30]
+  min_notice_hours integer [default: 2]
+  buffer_between_appointments_minutes integer [default: 0]
+  greeting_script text
+  escalation_enabled boolean [default: true]
+  max_hold_minutes integer [default: 5]
+  deleted_at timestamp [null]
+  updated_at timestamp [default: `now()`]
+}
+
+Table users {
+  id uuid [pk, default: `gen_random_uuid()`]
+  tenant_id uuid [not null]
+  name varchar
+  email varchar
+  password_hash varchar
+  role varchar
+  is_active boolean [default: true]
+  deleted_at timestamp [null]
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+
+  Indexes {
+    (tenant_id, email) [unique, name: 'idx_users_tenant_email']
+  }
+}
+
+// ============================================================
+// CUSTOMERS & LEADS
+// ============================================================
+
+Table customers {
+  id uuid [pk, default: `gen_random_uuid()`]
+  tenant_id uuid [not null]
+  full_name varchar
+  email varchar
+  phone varchar
+  address text
+  notes text
+  preferred_language varchar [default: 'en']
+  preferred_voice_language varchar [default: 'en-US']
+  preferred_service_id uuid [null]
+  last_call_at timestamp [null]
+  last_booking_at timestamp [null]
+  deleted_at timestamp [null]
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+
+  Indexes {
+    (tenant_id, phone) [name: 'idx_customers_tenant_phone']
+    (tenant_id, email) [name: 'idx_customers_tenant_email']
+  }
+}
+
+Table leads {
+  id uuid [pk, default: `gen_random_uuid()`]
+  tenant_id uuid [not null]
+  customer_id uuid [null]
+  source varchar
+  purpose text
+  status varchar [default: 'new']
+  priority varchar [default: 'medium']
+  deleted_at timestamp [null]
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+
+  Indexes {
+    (tenant_id, status, priority) [name: 'idx_leads_tenant_status_priority']
+  }
+}
+
+// ============================================================
+// SERVICES & SLOTS
+// ============================================================
+
+Table services {
+  id uuid [pk, default: `gen_random_uuid()`]
+  tenant_id uuid [not null]
+  name varchar
+  description text
+  duration_minutes integer
+  price decimal
+  is_active boolean [default: true]
+  buffer_minutes integer [default: 0]
+  max_bookings_per_slot integer [default: 1]
+  color varchar [default: '#3b82f6']
+  deleted_at timestamp [null]
+  created_at timestamp [default: `now()`]
+
+  Indexes {
+    (tenant_id, is_active) [name: 'idx_services_tenant_active']
+  }
+}
+
+Table slots {
+  id uuid [pk, default: `gen_random_uuid()`]
+  tenant_id uuid [not null]
+  service_id uuid [not null]
+  start_time timestamp [not null]
+  end_time timestamp [not null]
+  status varchar [default: 'available']
+  held_by_session uuid [null]
+  held_by_customer uuid [null]
+  held_until timestamp [null]
+  version integer [default: 1]
+  deleted_at timestamp [null]
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+
+  Indexes {
+    (tenant_id, start_time, status) [name: 'idx_slots_tenant_time_status']
+    (held_until) [name: 'idx_slots_held_until']
+    (held_by_customer) [name: 'idx_slots_held_by_customer']
+  }
+
+  Note: 'Denormalized held_by_customer avoids JOIN during cleanup if session is purged.'
+}
+
+// ============================================================
+// APPOINTMENTS
+// ============================================================
+
+Table appointments {
+  id uuid [pk, default: `gen_random_uuid()`]
+  tenant_id uuid [not null]
+  customer_id uuid [not null]
+  service_id uuid [not null]
+  session_id uuid [null]
+  slot_id uuid [not null]
+  calendar_integration_id uuid [not null]
+  title varchar
+  start_time timestamp [not null]
+  end_time timestamp [not null]
+  timezone varchar
+  status varchar [default: 'confirmed']
+  google_event_id varchar
+  notes text
+  held_at timestamp [null]
+  confirmed_at timestamp [null]
+  version integer [default: 1]
+  sync_status varchar [default: 'synced']
+  sync_error text [null]
+  deleted_at timestamp [null]
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+
+  Indexes {
+    (tenant_id, start_time, status) [name: 'idx_appointments_tenant_time_status']
+    (tenant_id, google_event_id) [name: 'idx_appointments_tenant_google']
+    (slot_id) [name: 'idx_appointments_slot_id']
+    (sync_status) [name: 'idx_appointments_sync_status']
+  }
+}
+
+// ============================================================
+// BUSINESS HOURS & CALENDAR
+// ============================================================
+
+Table business_hours {
+  id uuid [pk, default: `gen_random_uuid()`]
+  tenant_id uuid [not null]
+  weekday integer
+  opens_at time
+  closes_at time
+  is_closed boolean [default: false]
+  deleted_at timestamp [null]
+
+  Indexes {
+    (tenant_id, weekday) [name: 'idx_business_hours_tenant_weekday']
+  }
+}
+
+Table calendar_integrations {
+  id uuid [pk, default: `gen_random_uuid()`]
+  tenant_id uuid [not null]
+  provider varchar [default: 'google']
+  calendar_id varchar
+  access_token text
+  refresh_token text
+  expires_at timestamp
+  sync_enabled boolean [default: true]
+  last_sync_at timestamp [null]
+  webhook_channel_id varchar [null]
+  deleted_at timestamp [null]
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+
+  Indexes {
+    (tenant_id, provider) [name: 'idx_calendar_tenant_provider']
+    (webhook_channel_id) [name: 'idx_calendar_webhook_channel']
+  }
+}
+
+// ============================================================
+// AI & VOICE CONFIGURATION
+// ============================================================
+
+Table ai_configs {
+  id uuid [pk, default: `gen_random_uuid()`]
+  tenant_id uuid [not null]
+  system_prompt text
+  llm_provider varchar
+  llm_model varchar
+  stt_provider varchar
+  tts_provider varchar
+  temperature decimal [default: 0.7]
+  max_tokens integer [default: 150]
+  provider_config jsonb [default: '{}']
+  deleted_at timestamp [null]
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+
+  Indexes {
+    (tenant_id) [unique, name: 'idx_ai_configs_tenant_unique']
+  }
+
+  Note: 'provider_config stores provider-specific keys (top_p, response_format, etc.) without schema changes on provider switch.'
+}
+
+Table voice_configs {
+  id uuid [pk, default: `gen_random_uuid()`]
+  tenant_id uuid [not null]
+  provider varchar
+  voice_id varchar
+  language varchar [default: 'en-US']
+  stability decimal [default: 0.5]
+  similarity decimal [default: 0.75]
+  speaking_rate decimal [default: 1.0]
+  deleted_at timestamp [null]
+  created_at timestamp [default: `now()`]
+
+  Indexes {
+    (tenant_id) [unique, name: 'idx_voice_configs_tenant_unique']
+  }
+}
+
+// ============================================================
+// KNOWLEDGE BASE (RAG-Ready)
+// ============================================================
+
+Table knowledge_bases {
+  id uuid [pk, default: `gen_random_uuid()`]
+  tenant_id uuid [not null]
+  name varchar
+  description text
+  deleted_at timestamp [null]
+  created_at timestamp [default: `now()`]
+}
+
+Table knowledge_documents {
+  id uuid [pk, default: `gen_random_uuid()`]
+  tenant_id uuid [not null]
+  kb_id uuid [not null]
+  filename varchar
+  file_path text
+  file_type varchar
+  file_size bigint
+  status varchar [default: 'processing']
+  document_hash varchar [null]
+  chunking_strategy varchar [default: 'recursive_512']
+  embedding_version varchar [null]
+  indexed_at timestamp [null]
+  deleted_at timestamp [null]
+  uploaded_at timestamp [default: `now()`]
+
+  Indexes {
+    (tenant_id, status) [name: 'idx_kdocs_tenant_status']
+    (document_hash) [name: 'idx_kdocs_hash']
+  }
+}
+
+// ============================================================
+// CALL SESSIONS (FSM-Aware + Structured Transcript)
+// ============================================================
+
+Table call_sessions {
+  id uuid [pk, default: `gen_random_uuid()`]
+  tenant_id uuid [not null]
+  customer_id uuid [null]
+  lead_id uuid [null]
+  service_id uuid [null]
+  session_type varchar
+  livekit_room varchar [unique]
+  status varchar [default: 'ringing']
+  ended_reason varchar [null]
+  fsm_state varchar [default: 'idle']
+  fsm_stack jsonb [default: '[]']
+  intent_context jsonb [default: '{}']
+  booking_outcome varchar [null]
+  agent_config_snapshot jsonb [default: '{}']
+  started_at timestamp
+  ended_at timestamp
+  duration_seconds integer
+  transcript jsonb [default: '[]']
+  summary text
+  sentiment varchar
+  detected_intent varchar
+  total_input_tokens integer
+  total_output_tokens integer
+  total_cost decimal
+  metadata jsonb [default: '{}']
+  deleted_at timestamp [null]
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+
+  Indexes {
+    (tenant_id, status) [name: 'idx_sessions_tenant_status']
+    (livekit_room) [name: 'idx_sessions_livekit_room']
+    (customer_id) [name: 'idx_sessions_customer_id']
+    (ended_reason) [name: 'idx_sessions_ended_reason']
+  }
+
+  Note: 'Transcript event schema per element: { id: uuid, type: "user_speech|agent_speech|tool_call|tool_result|interruption|state_change|error", speaker: "user|agent", text: string, tool: {name, arguments}, tool_result: {status, data}, latency_ms: {stt, llm, tts}, timestamp: ISO8601 }'
+}
+
+// ============================================================
+// NOTIFICATIONS
+// ============================================================
+
+Table notifications {
+  id uuid [pk, default: `gen_random_uuid()`]
+  tenant_id uuid [not null]
+  customer_id uuid [not null]
+  type varchar
+  message text
+  status varchar [default: 'pending']
+  scheduled_at timestamp
+  sent_at timestamp
+  deleted_at timestamp [null]
+  created_at timestamp [default: `now()`]
+
+  Indexes {
+    (tenant_id, status, scheduled_at) [name: 'idx_notifications_tenant_status_scheduled']
+  }
+}
+
+// ============================================================
+// JOB LOGS (Celery-Free Observability)
+// ============================================================
+
+Table job_logs {
+  id uuid [pk, default: `gen_random_uuid()`]
+  tenant_id uuid [null]
+  job_type varchar
+  job_id varchar
+  status varchar [default: 'started']
+  payload jsonb [default: '{}']
+  result jsonb [default: '{}']
+  error_message text [null]
+  started_at timestamp
+  completed_at timestamp [null]
+  deleted_at timestamp [null]
+  created_at timestamp [default: `now()`]
+
+  Indexes {
+    (job_type, status) [name: 'idx_job_logs_type_status']
+    (started_at) [name: 'idx_job_logs_started_at']
+  }
+}
+
+// ============================================================
+// INTEGRATIONS
+// ============================================================
+
+Table integrations {
+  id uuid [pk, default: `gen_random_uuid()`]
+  tenant_id uuid [not null]
+  provider varchar
+  config json
+  is_active boolean [default: true]
+  deleted_at timestamp [null]
+  created_at timestamp [default: `now()`]
+}
+
+// ============================================================
+// AUDIT LOGS (Enterprise Compliance)
+// ============================================================
+
+Table audit_logs {
+  id uuid [pk, default: `gen_random_uuid()`]
+  tenant_id uuid [not null]
+  actor_type varchar [default: 'user']
+  actor_id uuid [null]
+  action varchar
+  entity_type varchar
+  entity_id uuid [null]
+  old_values jsonb [null]
+  new_values jsonb [null]
+  metadata jsonb [default: '{}']
+  created_at timestamp [default: `now()`]
+
+  Indexes {
+    (tenant_id, entity_type, entity_id) [name: 'idx_audit_tenant_entity']
+    (actor_id, created_at) [name: 'idx_audit_actor_created']
+    (created_at) [name: 'idx_audit_created_at']
+  }
+
+  Note: 'Append-only. Never updated or deleted. Implement via PostgreSQL triggers or service-layer middleware.'
+}
+
+// ============================================================
+// RELATIONSHIPS
+// ============================================================
+
+Ref: tenant_settings.tenant_id > tenants.id
+Ref: users.tenant_id > tenants.id
+Ref: customers.tenant_id > tenants.id
+Ref: customers.preferred_service_id > services.id
+Ref: leads.tenant_id > tenants.id
+Ref: leads.customer_id > customers.id
+Ref: services.tenant_id > tenants.id
+Ref: slots.tenant_id > tenants.id
+Ref: slots.service_id > services.id
+Ref: slots.held_by_session > call_sessions.id
+Ref: slots.held_by_customer > customers.id
+Ref: appointments.tenant_id > tenants.id
+Ref: appointments.customer_id > customers.id
+Ref: appointments.service_id > services.id
+Ref: appointments.session_id > call_sessions.id
+Ref: appointments.slot_id > slots.id
+Ref: appointments.calendar_integration_id > calendar_integrations.id
+Ref: business_hours.tenant_id > tenants.id
+Ref: calendar_integrations.tenant_id > tenants.id
+Ref: ai_configs.tenant_id > tenants.id
+Ref: voice_configs.tenant_id > tenants.id
+Ref: knowledge_bases.tenant_id > tenants.id
+Ref: knowledge_documents.tenant_id > tenants.id
+Ref: knowledge_documents.kb_id > knowledge_bases.id
+Ref: call_sessions.tenant_id > tenants.id
+Ref: call_sessions.customer_id > customers.id
+Ref: call_sessions.lead_id > leads.id
+Ref: call_sessions.service_id > services.id
+Ref: notifications.tenant_id > tenants.id
+Ref: notifications.customer_id > customers.id
+Ref: job_logs.tenant_id > tenants.id
+Ref: integrations.tenant_id > tenants.id
+Ref: audit_logs.tenant_id > tenants.id
+Ref: tenants.default_calendar_id > calendar_integrations.id
