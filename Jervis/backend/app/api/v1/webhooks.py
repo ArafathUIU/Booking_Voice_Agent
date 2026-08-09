@@ -4,7 +4,7 @@ Twilio POSTs call lifecycle events here (no-answer, busy, failed, completed,
 ...). We use it to record failed/unanswered attempts and rearm the retry queue.
 Answered calls are finalized by the Media Streams WebSocket handler instead, so
 this endpoint ignores ``answered``/``completed`` events for sessions it doesn't
-know about ΓÇö but it still records ``completed`` so a short call that never
+know about — but it still records ``completed`` so a short call that never
 opened a stream (or a machine greeting) doesn't leave the lead stuck in
 'dialing'.
 """
@@ -19,6 +19,7 @@ from app.config import settings
 from app.db.session import async_session_factory
 from app.services.call_service import CallService
 from app.services.lead_service import LeadService
+from app.services.voice_log import log_event
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,19 @@ async def twilio_status_callback(request: Request):
     session_id = request.query_params.get("sessionId")
     call_status = data.get("CallStatus", "")
     call_sid = data.get("CallSid", "")
+    log_event(
+        "status_callback",
+        lead_id=lead_id,
+        session_id=session_id,
+        call_sid=call_sid,
+        call_status=call_status,
+        duration=data.get("CallDuration"),
+        sip_code=data.get("SipResponseCode"),
+        body={k: v for k, v in data.items() if k in {
+            "CallStatus", "CallSid", "CallDuration", "SipResponseCode",
+            "Direction", "To", "From", "ErrorMessage", "ErrorCode",
+        }},
+    )
 
     if not session_id:
         logger.warning("Twilio status callback missing sessionId (status=%s)", call_status)

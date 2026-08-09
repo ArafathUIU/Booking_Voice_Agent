@@ -9,6 +9,7 @@ from app.db.session import async_session_factory
 from app.services.twilio_client import create_outbound_call
 from app.services.call_service import CallService
 from app.services.lead_service import LeadService
+from app.services.voice_log import log_event
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +18,7 @@ async def start_outbound_call(lead_id: str) -> dict:
     """Orchestrate an outbound call for a lead.
 
     Atomically claims the lead (pending -> dialing) so the manual /outbound
-    path and the poller can never dial the same lead twice ΓÇö whichever runs
+    path and the poller can never dial the same lead twice — whichever runs
     second finds it already claimed and bails. Then creates the session and
     dials via Twilio Programmable Voice. The TwiML points Twilio's Media Stream
     at our /ws/twilio-media WebSocket, where the agent pipeline runs when the
@@ -67,8 +68,17 @@ async def start_outbound_call(lead_id: str) -> dict:
             lead_id=lead_id,
             session_id=session_id,
         )
+        log_event(
+            "call_placed",
+            lead_id=lead_id,
+            session_id=session_id,
+            call_sid=call_sid,
+            to=settings.twilio_verified_number,
+            from_=settings.twilio_from_number,
+        )
     except Exception as e:  # noqa: BLE001
         logger.error("Twilio dial failed for lead %s: %s", lead_id, e)
+        log_event("dial_error", lead_id=lead_id, session_id=session_id, error=str(e))
         await _record(lead_id, session_id, "failed", f"dial_error: {e}")
         await _rearm_or_fail(lead_id, session_id)
         return {"status": "failed", "reason": "dial_error", "detail": str(e)}
