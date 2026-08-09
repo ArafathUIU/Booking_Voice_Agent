@@ -68,7 +68,7 @@ def _gather_twiml(text: str, *, lead_id: str, session_id: str, hangup: bool = Fa
             "<Hangup/>"
             "</Response>"
         )
-    action = _trial_native_url("/twiml/turn", lead_id, session_id)
+    action = escape(_trial_native_url("/twiml/turn", lead_id, session_id))
     return (
         "<Response>"
         f"<Gather input=\"speech dtmf\" timeout=\"5\" speechTimeout=\"auto\" "
