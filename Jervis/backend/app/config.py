@@ -89,6 +89,13 @@ class Settings(BaseSettings):
     # Public base URL (ngrok) Twilio reaches us on, e.g. https://abc.ngrok-free.app.
     # Used to build the Media Stream wss:// URL and the status-callback URL.
     twilio_public_base_url: str = ""
+    # Outbound voice transport. "trial_native" (default) uses Twilio's built-in
+    # <Say> + <Gather input="speech"> so calls work on trial accounts (which
+    # strip the <Stream> verb); "media_streams" bridges audio over a WebSocket
+    # into the pipecat pipeline (requires a paid/upgraded Twilio account).
+    twilio_voice_mode: str = "trial_native"
+    # TwiML <Say> voice used in trial_native mode, e.g. "Polly.Joanna".
+    twilio_say_voice: str = "Polly.Joanna"
 
     # Legacy LiveKit SIP path (kept for future LiveKit Cloud use). LiveKit
     # outbound trunk id (set after provisioning). If empty, the trunk is
