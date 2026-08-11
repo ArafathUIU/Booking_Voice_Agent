@@ -28,6 +28,8 @@ services:
       TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER:-}
       TWILIO_VERIFIED_NUMBER: ${TWILIO_VERIFIED_NUMBER:-}
       TWILIO_PUBLIC_BASE_URL: ${TWILIO_PUBLIC_BASE_URL:-}
+      TWILIO_VOICE_MODE: ${TWILIO_VOICE_MODE:-trial_native}
+      TWILIO_SAY_VOICE: ${TWILIO_SAY_VOICE:-Polly.Joanna}
 
       # Legacy LiveKit SIP outbound (requires Twilio upgrade, kept for future)
       SIP_TRUNK_ID: ${SIP_TRUNK_ID:-}
@@ -77,6 +79,25 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+
+    restart: unless-stopped
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: jervis-pgadmin
+
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@jervis.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-admin}
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
+
+    ports:
+      - "5050:80"
+
+    depends_on:
+      db:
+        condition: service_healthy
 
     restart: unless-stopped
 
