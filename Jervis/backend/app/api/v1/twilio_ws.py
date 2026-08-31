@@ -17,6 +17,7 @@ Two outbound voice transports are supported, selected by
 import asyncio
 import json
 import logging
+import uuid
 from typing import Annotated
 from xml.sax.saxutils import escape
 
@@ -85,32 +86,99 @@ async def twiml(
     lead_id: Annotated[str, Query(alias="leadId")] = "",
     session_id: Annotated[str, Query(alias="sessionId")] = "",
 ) -> Response:
-    """Serve the outbound-call TwiML at a public URL.
+    """Serve the outbound-call or inbound-call TwiML at a public URL.
 
-    ``media_streams`` mode returns the ``<Connect><Stream>`` TwiML the pipecat
-    pipeline runs on. ``trial_native`` mode returns a ``<Gather>`` greeting so
-    the call works without Media Streams (trial accounts strip ``<Stream>``).
+    If session_id is missing, this is an inbound call. We dynamically look up
+    the caller by phone or create a new lead, register a new CallSession,
+    and return the TwiML.
     """
+    lead_context = None
+
+    if not session_id:
+        form_data = {}
+        if request.method == "POST":
+            try:
+                form = await request.form()
+                form_data = dict(form.items())
+            except Exception:
+                pass
+        
+        caller_phone = form_data.get("From", "")
+        async with async_session_factory() as db:
+            cs = CallService(db)
+            svc = LeadService(db)
+            
+            # Lookup lead by phone
+            if caller_phone:
+                from sqlalchemy import select
+                from app.models.lead import Lead
+                stmt = select(Lead).where(Lead.phone == caller_phone).order_by(Lead.created_at.desc()).limit(1)
+                res = await db.execute(stmt)
+                lead_row = res.scalar_one_or_none()
+                if lead_row:
+                    lead_id = str(lead_row.id)
+                    lead_context = {
+                        "customer_name": lead_row.customer_name,
+                        "customer_phone": lead_row.phone,
+                        "purpose": lead_row.purpose,
+                        "service": lead_row.service,
+                    }
+            
+            # Create dynamic lead if none exists
+            if not lead_id:
+                new_lead = await svc.create_lead(
+                    tenant_id=settings.tenant_id,
+                    customer_name="",
+                    phone=caller_phone or "unknown",
+                    purpose="Inbound call",
+                )
+                await db.commit()
+                lead_id = str(new_lead.id)
+                lead_context = {
+                    "customer_name": "",
+                    "customer_phone": new_lead.phone,
+                    "purpose": new_lead.purpose,
+                    "service": new_lead.service,
+                }
+            
+            # Create call session
+            session = await cs.create_session(
+                tenant_id=settings.tenant_id,
+                room_name=f"twilio-inbound-{uuid.uuid4().hex[:12]}",
+                session_type="phone_inbound",
+                customer_name=lead_context["customer_name"] or None,
+                customer_phone=lead_context["customer_phone"],
+                lead_id=lead_id,
+            )
+            await db.commit()
+            session_id = str(session.id)
+            logger.info("Generated dynamic session_id=%s for inbound call from phone=%s", session_id, caller_phone)
+
     if settings.twilio_voice_mode == "media_streams":
         return Response(content=_build_twiml(lead_id, session_id), media_type=_XML_MEDIA_TYPE)
 
     # trial_native: register a headless engine for this call and greet.
-    lead_context = None
-    async with async_session_factory() as db:
-        cs = CallService(db)
-        svc = LeadService(db)
-        lead = await svc.get_lead(lead_id) if lead_id else None
-        if lead:
-            lead_context = {
-                "customer_name": lead.get("customer_name"),
-                "customer_phone": lead.get("phone"),
-                "purpose": lead.get("purpose"),
-                "service": lead.get("service"),
-            }
-        if lead_id:
-            await svc.record_attempt(lead_id, "answered", session_id, None)
-        await cs.start_session(session_id)
-        await db.commit()
+    if not lead_context:
+        async with async_session_factory() as db:
+            cs = CallService(db)
+            svc = LeadService(db)
+            lead = await svc.get_lead(lead_id) if lead_id else None
+            if lead:
+                lead_context = {
+                    "customer_name": lead.get("customer_name"),
+                    "customer_phone": lead.get("phone"),
+                    "purpose": lead.get("purpose"),
+                    "service": lead.get("service"),
+                }
+            if lead_id:
+                await svc.record_attempt(lead_id, "answered", session_id, None)
+            await cs.start_session(session_id)
+            await db.commit()
+    else:
+        async with async_session_factory() as db:
+            cs = CallService(db)
+            await cs.start_session(session_id)
+            await db.commit()
 
     engine = TurnEngine(
         session_id=session_id,
