@@ -15,37 +15,65 @@ as of the current codebase.
 ## Architecture Overview
 
 ```
-Caller (browser) ── WebRTC a/v ──▶ LiveKit (media/signaling)
-                                      │
-                                      ▼  (LiveKit Go SDK over ws/wss)
-                          ┌─────────────────────────────────────────┐
-                          │  Pipecat voice pipeline             │
-                          │   LiveKit transport ──▶ Silero VAD
-                          │        ──▶ faster-whisper STT
-                          │        ──▶ ConversationManager (orchestrator)
-                          │        ──▶ Kokoro TTS ──▶ transport   │
-                          └───────────────────┬─────────────────────┘
-                                              │  HTTP/async
-                       ┌──────────────────────┴─────────────────────┐
-                       ▼                                             ▼
-              FastAPI  (backend)                              PostgreSQL (pgvector)
-              - /api/v1/calls/room  → create room + spawn agent   call_sessions
-              - /ws/transcript/{id} → live chat history over WS    bookings
-              - serves static index.html (chat UI)                 ai_configs
-                                                                   voice_configs
-                                                                   knowledge_chunks
-              Redis  (caching: conversation context, transcripts, slot hold)
+                             ┌───────────────────────────────────────────────┐
+                             │               Inbound / Outbound              │
+                             └───────┬───────────────────────────────┬───────┘
+                                     │                               │
+                      [Browser Caller: WebRTC]          [Phone Caller / Outbound Lead]
+                                     │                               │
+                                     ▼                               ▼
+                             LiveKit Server                 Twilio Voice API
+                            (media/signaling)        ┌───────────────┴───────────────┐
+                                     │               │                               │
+                                     │       (trial_native)                  (media_streams)
+                                     │        TwiML Gather                   WebSocket Audio
+                                     │       POST /twiml/turn                /ws/twilio-media
+                                     ▼               │                               │
+                        ┌────────────────────────┐   │                               │
+                        │ Pipecat Voice Pipeline │   │                               │
+                        │  - Silero VAD          │   │                               │
+                        │  - faster-whisper STT  │   │                               │
+                        │  - Kokoro ONNX TTS     │   │                               │
+                        └────────────┬───────────┘   │                               │
+                                     │               │                               │
+                                     ▼               ▼                               ▼
+                 ┌────────────────────────────────────────────────────────────────────────┐
+                 │                   TurnEngine (Unified Headless Brain)                  │
+                 │  - Slot Extraction (name, phone, service, date, time)                  │
+                 │  - ClinicDateTimeResolver (Asia/Dhaka timezone aware)                  │
+                 │  - DialogueManager (Deterministic FSM Policy: Greet → Gather → Book)   │
+                 │  - ResponseArbiter (Ensures exactly 1 spoken response per turn)        │
+                 │  - LLMService (Groq LLaMA 3.1 8B — strictly for small talk / RAG)      │
+                 │  - Tools (check_availability, hold_slot, book_appointment)             │
+                 └───────────────────────────────────┬────────────────────────────────────┘
+                                                     │
+                             ┌───────────────────────┴───────────────────────┐
+                             ▼                                               ▼
+               PostgreSQL 16 (pgvector)                            Redis Cache
+          - bookings (confirmed flat records)                - Session transcript cache
+          - call_sessions (JSONB transcripts & FSM state)    - Slot holds
+          - leads & lead_attempts (outbound dialing)
+          - knowledge_chunks (clinic Q&A vector embeddings)
+          - ai_configs & voice_configs
 ```
 
-### High-level flow
+### High-level flows
 
+**A. Inbound Browser Call (WebRTC):**
 1. The browser requests a room: `POST /api/v1/calls/room`.
 2. FastAPI creates a LiveKit room + tokens and a `call_sessions` row (`ringing`).
 3. A `BackgroundTask` spawns the Pipecat agent worker for that room.
-4. The browser joins and connects to `/ws/transcript/{session_id}` to render the
-   live conversation in the chat UI.
-5. The agent runs the FSM-style dialogue, checks availability, confirms, and books.
-6. On a confirmed booking, a row is persisted to the `bookings` table.
+4. The browser joins and connects to `/ws/transcript/{session_id}` to render the live conversation in the chat UI.
+5. The Pipecat pipeline passes transcribed speech to `TurnEngine` (`ConversationManager`).
+6. On a confirmed booking, a flat record is persisted to the `bookings` table.
+
+**B. Telephony Inbound & Outbound (Twilio):**
+1. **Outbound Calling:** A web form queues a prospect in `leads`. An `AsyncIOScheduler` poller or manual trigger (`POST /api/v1/calls/outbound`) atomically claims the lead (`pending → dialing`) and triggers Twilio REST dialer.
+2. **Inbound Calling:** An incoming call to the Twilio number hits `/twiml`, dynamically creates or retrieves the caller in `leads`, and initializes a `CallSession`.
+3. **Audio Routing:**
+   - In `trial_native` mode (default, trial-compatible), turns route via `<Gather input="speech dtmf">` to `POST /twiml/turn`, which executes `TurnEngine.process_turn` directly.
+   - In `media_streams` mode, Twilio opens a WebSocket to `/ws/twilio-media`, where Pipecat runs the real-time audio pipeline.
+4. Call completion or failure is recorded in `lead_attempts`, and unreached leads are re-armed for retry with backoff.
 
 ---
 
