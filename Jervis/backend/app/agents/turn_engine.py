@@ -133,7 +133,7 @@ class TurnEngine:
             # (answers to the service question) must NOT overwrite the name.
             allow_bare_name=not bool(self.state.customer_name),
         )
-        self.state.apply_extracted(extracted)
+        self.state.apply_extracted(extracted, user_text=user_text)
 
         # Resolve appointment datetime when both date and time are available.
         if self.state.date_pref and self.state.time_pref:
@@ -159,8 +159,17 @@ class TurnEngine:
 
         source = self._action_source(action)
         if not text:
-            source = "fallback"
-            text = FALLBACK_SPEECH
+            if self.state.pending_confirm and self.state.chosen_slot:
+                date_str = dm._resolve_date_spoken(self.state.date_pref)
+                time_str = self.state.chosen_slot.get("spoken_time") or self.state.time_pref
+                source = "action"
+                text = (
+                    f"Just to confirm, we have a {self.state.service} on {date_str} at {time_str}. "
+                    f"Shall I go ahead and book it, or would you prefer a different time?"
+                )
+            else:
+                source = "fallback"
+                text = FALLBACK_SPEECH
 
         # Arbitrate: exactly one clean spoken line.
         self.arbiter.reset_turn()
@@ -296,6 +305,26 @@ class TurnEngine:
             self.state.call_closed = True
             return self.dialogue.close_text(self.state)
 
+        if action == dm.OUT_OF_HOURS:
+            requested = payload.get("requested_time", "that time")
+            date_str = dm._resolve_date_spoken(self.state.date_pref)
+            spoken = [s["spoken_time"] for s in self.state.offered_slots][:3]
+            list_str = ", ".join(spoken) if spoken else "our morning or afternoon slots"
+            return (
+                f"I'm sorry, our clinic is open from 9 AM to 6 PM, so we don't have appointments at {requested}. "
+                f"For {date_str}, we have {list_str} available. Which one suits you?"
+            )
+
+        if action == dm.UNAVAILABLE_TIME:
+            requested = payload.get("requested_time", "that time")
+            date_str = dm._resolve_date_spoken(self.state.date_pref)
+            spoken = [s["spoken_time"] for s in self.state.offered_slots][:3]
+            list_str = ", ".join(spoken) if spoken else "our other open slots"
+            return (
+                f"I'm sorry, {requested} isn't available on {date_str}. "
+                f"The slots we have open are {list_str}. Which one would you prefer?"
+            )
+
         if action == dm.CLARIFY:
             return self.dialogue.clarify_text(self.state)
 
@@ -336,10 +365,10 @@ class TurnEngine:
             }
             self.state.stage = DONE
             self.state.pending_confirm = None
-            # Keep conversation open for follow-up questions or changes.
+            # Keep conversation open for follow-up questions.
             self.state.stage = OFFERING
             logger.info("Booking confirmed: %s", booking)
-            return self.dialogue.booked_text(self.state) + " Is there anything else you would like to change or ask?"
+            return self.dialogue.booked_text(self.state)
         except Exception as e:
             logger.exception("Booking failed with error: %s", str(e))
             self.state.stage = CONFIRMING

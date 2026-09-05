@@ -1559,7 +1559,10 @@
       if (speaker === "user" && !document.getElementById("slot-name").dataset.filled) {
         const nameMatch = text.match(/(?:my name is|i am|i'm|this is)\s+([A-Za-z]+)/i);
         if (nameMatch && nameMatch[1]) {
-          setSlot("slot-name", nameMatch[1]);
+          const excluded = ["saying", "said", "looking", "asking", "calling", "done", "fine", "ready", "trying", "hoping", "going"];
+          if (!excluded.includes(nameMatch[1].toLowerCase())) {
+            setSlot("slot-name", nameMatch[1].charAt(0).toUpperCase() + nameMatch[1].slice(1).toLowerCase());
+          }
         }
       }
 
@@ -1580,9 +1583,11 @@
       }
 
       // Time / slot detection
-      const timeMatch = text.match(/(tomorrow|today|monday|tuesday|wednesday|thursday|friday|saturday|\d{1,2}\s*(?:am|pm))/i);
-      if (timeMatch && (speaker === "agent" && (textLower.includes("book") || textLower.includes("confirmed") || textLower.includes("at")))) {
-        setSlot("slot-time", timeMatch[0]);
+      const timeMatch = text.match(/(the\s+day\s+after\s+tomorrow|day\s+after\s+tomorrow|tomorrow|today|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i);
+      if (timeMatch && (speaker === "agent" && (textLower.includes("book") || textLower.includes("confirmed") || textLower.includes("at") || textLower.includes("for")))) {
+        let val = timeMatch[0].trim();
+        val = val.charAt(0).toUpperCase() + val.slice(1);
+        setSlot("slot-time", val);
       }
 
       // Confirmation detection

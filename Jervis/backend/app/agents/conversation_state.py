@@ -65,6 +65,15 @@ _NAME_EXCLUDED = {
     "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
     "ten", "eleven", "twelve",
     "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+    "said", "saying", "say", "tell", "telling", "told", "ask", "asking",
+    "think", "thinking", "thought", "look", "looking", "want", "wanting",
+    "need", "needing", "know", "knowing", "see", "seeing", "seen", "show", "showing",
+    "hear", "hearing", "heard", "help", "helping", "hope", "hoping",
+    "try", "trying", "go", "going", "gone", "come", "coming", "came",
+    "done", "do", "doing", "make", "making", "made", "get", "getting",
+    "take", "taking", "talk", "talking", "mean", "meaning", "meant",
+    "slot", "slots", "time", "times", "day", "days", "week", "month",
+    "here", "there", "ready", "available", "closed", "open", "schedule",
 }
 
 WEEKDAYS = (
@@ -249,18 +258,22 @@ def extract_name(text: str, *, allow_bare: bool = True) -> Optional[str]:
         re.I,
     )
     if phrase:
-        return phrase.group(1).capitalize()
+        token = phrase.group(1).lower()
+        if token not in _NAME_EXCLUDED and not token.endswith("ing"):
+            return phrase.group(1).capitalize()
 
     for lead in (r"\bthis is\s+([a-zA-Z]+)", r"\bit'?s\s+([a-zA-Z]+)"):
-        match = re.search(lead, text)
+        match = re.search(lead, text, re.I)
         if match:
             token = match.group(1)
-            if token[:1].isupper() or token.lower() not in (
-                "the", "a", "an", "my", "your", "our", "not", "going",
-                "what", "how", "why", "just", "very", "really", "about",
-                "me", "him", "her", "them",
-            ):
-                return token.capitalize()
+            t_lower = token.lower()
+            if t_lower not in _NAME_EXCLUDED and not t_lower.endswith("ing") and not t_lower.endswith("ed"):
+                if token[:1].isupper() or t_lower not in (
+                    "the", "a", "an", "my", "your", "our", "not", "going",
+                    "what", "how", "why", "just", "very", "really", "about",
+                    "me", "him", "her", "them",
+                ):
+                    return token.capitalize()
 
     if allow_bare:
         cleaned = text.strip().rstrip(".?!, ")
@@ -575,17 +588,32 @@ class ConversationState:
 
     MAX_HISTORY_TURNS = 12
 
-    def apply_extracted(self, extracted: dict):
-        if extracted.get("name"):
-            self.customer_name = extracted["name"]
-        if extracted.get("phone"):
-            self.customer_phone = extracted["phone"]
-        if extracted.get("service"):
-            self.service = extracted["service"]
-        if extracted.get("date"):
-            self.date_pref = extracted["date"]
-        if extracted.get("time"):
-            self.time_pref = extracted["time"]
+    def apply_extracted(self, extracted: dict, user_text: str = ""):
+        name = extracted.get("name") or extracted.get("customer_name")
+        if name:
+            if not self.customer_name:
+                self.customer_name = name
+            else:
+                lower = (user_text or "").lower()
+                if any(p in lower for p in ("my name is actually", "actually my name is", "call me", "change my name", "not my name", "correct my name")):
+                    self.customer_name = name
+        phone = extracted.get("phone") or extracted.get("customer_phone")
+        if phone:
+            self.customer_phone = phone
+        service = extracted.get("service")
+        if service:
+            self.service = service
+        date = extracted.get("date") or extracted.get("date_pref")
+        if date:
+            if not self.date_pref or self.stage != CONFIRMING:
+                self.date_pref = date
+            else:
+                lower = (user_text or "").lower()
+                if any(p in lower for p in ("change date", "different date", "different day", "reschedule", "instead", "switch to", "prefer", "can we do", "how about")):
+                    self.date_pref = date
+        time = extracted.get("time") or extracted.get("time_pref")
+        if time:
+            self.time_pref = time
 
     def resolve_appointment_dt(self, resolver: "ClinicDateTimeResolver") -> Optional[datetime]:
         """Resolve date_pref + time_pref into a timezone-aware datetime."""

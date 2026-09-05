@@ -7,7 +7,13 @@ from pipecat.frames.frames import TextFrame, TTSSpeakFrame, UserStartedSpeakingF
 
 from app.agents import dialogue_manager as dm
 from app.agents.conversation_manager import ConversationManager
-from app.agents.conversation_state import extract_slots, extract_phone, _PHONE_MIN_DIGITS
+from app.agents.conversation_state import (
+    extract_slots,
+    extract_phone,
+    extract_name,
+    _PHONE_MIN_DIGITS,
+    CONFIRMING,
+)
 
 
 def _make() -> ConversationManager:
@@ -205,3 +211,73 @@ def test_offer_text_varies_on_repeat():
     second = m.dialogue.offer_text(m.state)
     assert "Which works best for you?" in first
     assert "which" in second.lower() or "which one" in second.lower()
+
+
+def test_name_not_overwritten_by_casual_phrases():
+    # Casual phrases like "it's said" or "I am saying" must not be extracted as names
+    assert extract_name("She do all the time it's said for tomorrow, but I said") != "Said"
+    assert extract_name("I am saying 9 p.m.") != "Saying"
+
+    m = _make()
+    m.state.customer_name = "Akash"
+    # Even if an accidental extraction slips through, apply_extracted must protect existing name
+    m.state.apply_extracted({"customer_name": "Said"}, user_text="it's said for tomorrow")
+    assert m.state.customer_name == "Akash"
+
+    # Explicit correction should still be allowed
+    m.state.apply_extracted({"customer_name": "Rahim"}, user_text="actually my name is Rahim")
+    assert m.state.customer_name == "Rahim"
+
+
+def test_out_of_hours_9pm_and_candidates():
+    from app.agents.dialogue_manager import _time_candidates, check_out_of_hours_request
+
+    # 9 PM must produce 21:00 only, never 09:00
+    candidates = _time_candidates("9 p.m.")
+    assert "21:00" in candidates
+    assert "09:00" not in candidates
+
+    # Out-of-hours check must flag 9 PM
+    assert check_out_of_hours_request("9 p.m.") == "9 PM"
+
+    m = _make()
+    m.state.stage = dm.OFFERING
+    m.state.customer_name = "Akash"
+    m.state.customer_phone = "01712345678"
+    m.state.service = "Checkup"
+    m.state.date_pref = "tomorrow"
+    m.state.offered_slots = [
+        {"time": "09:00", "spoken_time": "9 AM", "available": True},
+        {"time": "10:00", "spoken_time": "10 AM", "available": True},
+    ]
+    action, payload = m.dialogue.decide(m.state, "I want 9 p.m.")
+    assert action == dm.OUT_OF_HOURS
+    assert payload.get("requested_time") == "9 PM"
+
+
+def test_date_preference_not_corrupted_during_confirmation():
+    m = _make()
+    m.state.customer_name = "Akash"
+    m.state.customer_phone = "01712345678"
+    m.state.service = "Checkup"
+    m.state.date_pref = "day after tomorrow"
+    m.state.chosen_slot = {"time": "14:00", "spoken_time": "2 PM", "available": True}
+    m.state.stage = CONFIRMING
+    m.state.pending_confirm = True
+
+    # User remark discussing the date should not corrupt date_pref to "tomorrow"
+    m.state.apply_extracted({"date_pref": "tomorrow"}, user_text="the day after tomorrow would be Monday")
+    assert m.state.date_pref == "day after tomorrow"
+
+
+def test_booked_text_asks_for_questions_without_change_prompt():
+    m = _make()
+    m.state.customer_name = "Akash"
+    m.state.service = "Checkup"
+    m.state.date_pref = "Monday"
+    m.state.chosen_slot = {"time": "14:00", "spoken_time": "2 PM", "available": True}
+    text = m.dialogue.booked_text(m.state)
+
+    assert "Is there any other information you need, or anything else you'd like to ask?" in text
+    assert "change" not in text.lower()
+

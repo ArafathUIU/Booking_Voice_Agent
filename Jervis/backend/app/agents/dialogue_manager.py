@@ -28,6 +28,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 from app.agents.constants import KNOWLEDGE_BASE
+from app.config import settings
 from app.agents.conversation_state import (
     CONFIRMING,
     DONE,
@@ -54,6 +55,8 @@ ANSWER_QUESTION = "answer_question"
 CLOSE = "close"
 RESPOND = "respond"
 CLARIFY = "clarify"
+OUT_OF_HOURS = "out_of_hours"
+UNAVAILABLE_TIME = "unavailable_time"
 
 _YES_RE = re.compile(
     r"\b(yes|yeah|yep|yup|sure|okay|ok|confirm|confirmed|book it|book that|"
@@ -143,11 +146,15 @@ def _time_candidates(text_lower: str) -> set:
         minute = m.group(2) or "00"
         meridian = (m.group(3) or "").lower()
         if "p" in meridian:
-            candidates.add(f"{hour % 12 or 12:02d}:{minute}")
-            if hour < 12:
+            if hour == 12:
+                candidates.add(f"12:{minute}")
+            elif 1 <= hour < 12:
                 candidates.add(f"{hour + 12:02d}:{minute}")
         elif "a" in meridian:
-            candidates.add(f"{hour % 12 or 12:02d}:{minute}")
+            if hour == 12:
+                candidates.add(f"00:{minute}")
+            else:
+                candidates.add(f"{hour:02d}:{minute}")
         elif hour >= 13:
             candidates.add(f"{hour:02d}:{minute}")
         else:
@@ -158,11 +165,15 @@ def _time_candidates(text_lower: str) -> set:
     for word, num in TIME_WORDS.items():
         if re.search(rf"\b{word}\b", text_lower):
             if re.search(rf"\b{word}\s+(pm|p\.?m\.?)\b", text_lower):
-                candidates.add(f"{num % 12 or 12:02d}:00")
-                if num < 12:
+                if num == 12:
+                    candidates.add("12:00")
+                elif num < 12:
                     candidates.add(f"{num + 12:02d}:00")
             elif re.search(rf"\b{word}\s+(am|a\.?m\.?)\b", text_lower):
-                candidates.add(f"{num % 12 or 12:02d}:00")
+                if num == 12:
+                    candidates.add("00:00")
+                else:
+                    candidates.add(f"{num:02d}:00")
             else:
                 candidates.add(f"{num:02d}:00")
                 if 1 <= num < 12:
@@ -170,14 +181,71 @@ def _time_candidates(text_lower: str) -> set:
     return candidates
 
 
+def check_out_of_hours_request(text_lower: str) -> Optional[str]:
+    """Return formatted spoken time if the caller requested an out-of-hours time (before 9 AM or 6 PM or later)."""
+    start_hour = settings.business_hours_start
+    end_hour = settings.business_hours_end
+    candidates = _time_candidates(text_lower)
+    if not candidates:
+        return None
+    # If any candidate falls within business hours (e.g. "3" -> 15:00), don't treat as out-of-hours
+    for c in candidates:
+        try:
+            h = int(c.split(":")[0])
+            if start_hour <= h < end_hour:
+                return None
+        except Exception:
+            pass
+
+    for c in candidates:
+        try:
+            h, m = map(int, c.split(":"))
+            if h < start_hour or h >= end_hour:
+                suffix = "AM" if h < 12 else "PM"
+                h12 = h % 12 or 12
+                return f"{h12} {suffix}" if m == 0 else f"{h12}:{m:02d} {suffix}"
+        except Exception:
+            continue
+    return None
+
+
+def check_unoffered_time_request(text_lower: str, offered_slots: list) -> Optional[str]:
+    """Return formatted spoken time if the caller requested an in-hours time that is not among offered slots."""
+    if text_lower.strip() in ("1", "2", "3", "4", "5"):
+        return None
+    candidates = _time_candidates(text_lower)
+    if not candidates or not offered_slots:
+        return None
+    matched = any(_slot_aliases(s.get("time", "")) & candidates for s in offered_slots)
+    if not matched:
+        start_hour = settings.business_hours_start
+        end_hour = settings.business_hours_end
+        for c in candidates:
+            try:
+                h, m = map(int, c.split(":"))
+                if start_hour <= h < end_hour:
+                    suffix = "AM" if h < 12 else "PM"
+                    h12 = h % 12 or 12
+                    return f"{h12} {suffix}" if m == 0 else f"{h12}:{m:02d} {suffix}"
+            except Exception:
+                continue
+    return None
+
+
 def _slot_aliases(slot_time: str) -> set:
     """Variants of a slot time so '3' can match '15:00'."""
     aliases = {slot_time}
-    hour = slot_time.split(":")[0]
-    minute = slot_time.split(":")[1]
-    aliases.add(f"{int(hour):d}:{minute}")
-    aliases.add(hour)
-    aliases.add(f"{int(hour):02d}")
+    hour_str, minute = slot_time.split(":")
+    hour = int(hour_str)
+    aliases.add(f"{hour:d}:{minute}")
+    aliases.add(hour_str)
+    aliases.add(f"{hour:02d}")
+    # 12-hour variants (e.g. 15:00 -> 3:00, 03:00, 3, 03)
+    h12 = hour % 12 or 12
+    aliases.add(f"{h12:d}:{minute}")
+    aliases.add(f"{h12:02d}:{minute}")
+    aliases.add(str(h12))
+    aliases.add(f"{h12:02d}")
     return aliases
 
 
@@ -278,12 +346,31 @@ class DialogueManager:
             if slot:
                 return (CHOOSE_SLOT, {"slot": slot})
 
+            # Check if caller specifically asked for an out-of-hours time (e.g. 9 PM)
+            out_of_hours = check_out_of_hours_request(lower)
+            if out_of_hours:
+                return (OUT_OF_HOURS, {"requested_time": out_of_hours})
+
+            # Check if caller asked for an in-hours time that is not among offered slots
+            unoffered = check_unoffered_time_request(lower, state.offered_slots)
+            if unoffered:
+                return (UNAVAILABLE_TIME, {"requested_time": unoffered})
+
         # Yes/no while a confirmation is pending.
         if state.pending_confirm:
             if is_yes(lower):
                 return (CONFIRM, {})
             if is_no(lower):
                 return (CANCEL_CONFIRM, {})
+
+            # If user asks a factual question while confirming
+            topic = detect_question_topic(lower)
+            if topic:
+                return (ANSWER_QUESTION, {"topic": topic})
+
+            # If user questions or discusses the date/time/slot
+            if _CLARIFICATION_RE.search(lower) or any(w in lower for w in WEEKDAYS) or "tomorrow" in lower or "today" in lower or "schedule" in lower or "time" in lower:
+                return (CLARIFY, {})
 
         # Factual questions are answered deterministically from the knowledge
         # base (never via the LLM, so answers stay correct and fast).
@@ -412,7 +499,7 @@ class DialogueManager:
             time_str = state.time_pref
         return (
             f"Perfect, {name}! Your {state.service} is booked for {date_str} "
-            f"at {time_str}. Is there anything else I can help you with?"
+            f"at {time_str}. Is there any other information you need, or anything else you'd like to ask?"
         )
 
     def reoffer_text(self, state) -> str:
@@ -433,7 +520,12 @@ class DialogueManager:
     def clarify_text(self, state) -> str:
         date_str = _resolve_date_spoken(state.date_pref)
         if state.pending_confirm and state.chosen_slot:
-            return self.confirm_text(state)
+            name_part = f", {state.customer_name}" if state.customer_name else ""
+            time_str = state.chosen_slot.get("spoken_time") or state.time_pref
+            return (
+                f"Yes, exactly{name_part}! We are confirming your {state.service} on {date_str} "
+                f"at {time_str}. Shall I go ahead and book it, or would you prefer a different time?"
+            )
         spoken = [s["spoken_time"] for s in state.offered_slots][:3]
         if not spoken:
             return "Of course. We're booking your appointment — just let me know which time you'd prefer."
