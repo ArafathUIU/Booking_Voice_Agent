@@ -296,6 +296,15 @@ class TurnEngine:
             self.state.stage = OFFERING
             return self.dialogue.reoffer_text(self.state)
 
+        if action == dm.CONFIRM_BOOKED:
+            name_part = f", {self.state.customer_name}" if self.state.customer_name else ""
+            date_str = dm._resolve_date_spoken(self.state.date_pref)
+            time_str = (self.state.chosen_slot or {}).get("spoken_time") or self.state.time_pref
+            return (
+                f"You're all set{name_part}! Your appointment is already confirmed for {date_str} at {time_str}. "
+                f"Is there any other information you need, or anything else you'd like to ask?"
+            )
+
         if action == dm.ANSWER_QUESTION:
             return self.dialogue.answer_question(payload.get("topic")) or FALLBACK_SPEECH
 
@@ -365,8 +374,6 @@ class TurnEngine:
             }
             self.state.stage = DONE
             self.state.pending_confirm = None
-            # Keep conversation open for follow-up questions.
-            self.state.stage = OFFERING
             logger.info("Booking confirmed: %s", booking)
             return self.dialogue.booked_text(self.state)
         except Exception as e:

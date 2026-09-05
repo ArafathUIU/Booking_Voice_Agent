@@ -289,9 +289,12 @@ def _resolve_date_spoken(date_pref: str) -> str:
         return f"tomorrow ({day.strftime('%A')})"
     if lower in ("today",):
         return f"today ({today.strftime('%A')})"
-    if lower == "the day after tomorrow":
+    if lower in ("the day after tomorrow", "day after tomorrow"):
         day = today + timedelta(days=2)
         return f"day after tomorrow ({day.strftime('%A')})"
+    if "two days after tomorrow" in lower or "2 days after tomorrow" in lower:
+        day = today + timedelta(days=3)
+        return f"two days after tomorrow ({day.strftime('%A')})"
     
     # Try to resolve via the resolver for weekdays, "next Monday", etc.
     date_dt = resolver.resolve_date(date_pref)
@@ -337,6 +340,30 @@ class DialogueManager:
         # Closing the call (only when the booking flow isn't mid-request).
         if is_closing(lower) and (state.stage == DONE or not is_booking_intent(lower)):
             return (CLOSE, {})
+
+        # If booking is already completed and confirmed
+        if state.booking_id:
+            # Factual question (pricing, hours, location, etc.)
+            topic = detect_question_topic(lower)
+            if topic:
+                return (ANSWER_QUESTION, {"topic": topic})
+
+            # Caller chooses a different slot to reschedule
+            if state.offered_slots:
+                slot = match_slot_choice(lower, state.offered_slots)
+                if slot and slot.get("time") != (state.chosen_slot or {}).get("time"):
+                    return (CHOOSE_SLOT, {"slot": slot})
+
+            # Caller clarifies or asks to repeat
+            if _CLARIFICATION_RE.search(lower):
+                return (CLARIFY, {})
+
+            # Closing
+            if is_closing(lower):
+                return (CLOSE, {})
+
+            # Caller asks to confirm again, says okay, yes, etc.
+            return (CONFIRM_BOOKED, {})
 
         # Slot choice: caller names a time from the offered list. Allowed while
         # offering, confirming, or right after a check. Kept first so "actually

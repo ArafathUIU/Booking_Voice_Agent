@@ -112,8 +112,10 @@ class ClinicDateTimeResolver:
             return today
         if lower == "tomorrow":
             return today + timedelta(days=1)
-        if lower == "the day after tomorrow":
+        if lower in ("the day after tomorrow", "day after tomorrow"):
             return today + timedelta(days=2)
+        if "two days after tomorrow" in lower or "2 days after tomorrow" in lower:
+            return today + timedelta(days=3)
 
         # "next Monday", "this Friday"
         m = re.match(
@@ -388,11 +390,15 @@ def extract_date(text: str) -> Optional[str]:
         return None
     lower = text.lower()
 
-    # Check the "day after tomorrow" / "day before tomorrow" phrasing BEFORE
+    # Check "two days after tomorrow" / "day after tomorrow" phrasing BEFORE
     # the plain "tomorrow" check below — otherwise the substring match on
     # "tomorrow" fires first and silently returns the wrong day with no
     # error and no re-ask.
-    if re.search(r"\bday after tomorrow\b", lower):
+    m_days = re.search(r"\b(?:(two|\d+)\s+)?days?\s+after\s+tomorrow\b", lower)
+    if m_days:
+        num_word = m_days.group(1)
+        if num_word:
+            return "two days after tomorrow" if num_word in ("two", "2") else f"{num_word} days after tomorrow"
         return "the day after tomorrow"
     if re.search(r"\btoday\b", lower):
         return "today"

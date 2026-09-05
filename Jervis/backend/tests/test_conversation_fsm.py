@@ -1,6 +1,7 @@
 """Tests for the refactored conversation manager (deterministic dialogue)."""
 
 import asyncio
+from datetime import timedelta
 from unittest.mock import AsyncMock
 
 from pipecat.frames.frames import TextFrame, TTSSpeakFrame, UserStartedSpeakingFrame, UserStoppedSpeakingFrame
@@ -11,6 +12,8 @@ from app.agents.conversation_state import (
     extract_slots,
     extract_phone,
     extract_name,
+    extract_date,
+    ClinicDateTimeResolver,
     _PHONE_MIN_DIGITS,
     CONFIRMING,
 )
@@ -280,4 +283,37 @@ def test_booked_text_asks_for_questions_without_change_prompt():
 
     assert "Is there any other information you need, or anything else you'd like to ask?" in text
     assert "change" not in text.lower()
+
+
+def test_two_days_after_tomorrow_extraction_and_resolution():
+    extracted = extract_date("Two days after tomorrow.")
+    assert extracted == "two days after tomorrow"
+
+    resolver = ClinicDateTimeResolver()
+    today = resolver._today_start()
+    resolved = resolver.resolve_date(extracted)
+    assert resolved == today + timedelta(days=3)
+
+
+def test_already_booked_does_not_repeat_confirmation():
+    m = _make()
+    m.state.customer_name = "Chitol"
+    m.state.service = "Checkup"
+    m.state.date_pref = "day after tomorrow"
+    m.state.chosen_slot = {"time": "11:00", "spoken_time": "11 AM", "available": True}
+    m.state.booking_id = "book-chitol-123"
+
+    # User asking for price gets price answered
+    action, payload = m.dialogue.decide(m.state, "Can you tell me the price of this service?")
+    assert action == dm.ANSWER_QUESTION
+    assert payload.get("topic") == "pricing"
+
+    # User asking to confirm again does NOT re-prompt confirmation
+    action, _ = m.dialogue.decide(m.state, "Okay, then please confirm it.")
+    assert action == dm.CONFIRM_BOOKED
+
+    # User saying goodbye closes call
+    action, _ = m.dialogue.decide(m.state, "No, thank you.")
+    assert action == dm.CLOSE
+
 
