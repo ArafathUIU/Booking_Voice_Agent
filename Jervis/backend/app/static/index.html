@@ -3,600 +3,1934 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Jervis - Voice Assistant</title>
+  <title>Apex Dental Studio — Clara AI Voice Receptionist</title>
+  <meta name="description" content="Real-time voice receptionist for dental appointment booking, service inquiries, and availability checks powered by LiveKit and AI." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/livekit-client@2.9.3/dist/livekit-client.umd.min.js"></script>
+
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg-main: #060911;
+      --bg-surface: rgba(15, 23, 42, 0.75);
+      --bg-surface-elevated: rgba(30, 41, 59, 0.85);
+      --bg-surface-subtle: rgba(255, 255, 255, 0.03);
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --border-focus: rgba(20, 184, 166, 0.4);
+      --primary: #0d9488;
+      --primary-light: #14b8a6;
+      --primary-glow: rgba(20, 184, 166, 0.25);
+      --cyan: #06b6d4;
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --accent-green: #10b981;
+      --accent-red: #ef4444;
+      --accent-amber: #f59e0b;
+      --font-display: "Outfit", sans-serif;
+      --font-sans: "Plus Jakarta Sans", sans-serif;
+      --radius-sm: 8px;
+      --radius-md: 14px;
+      --radius-lg: 20px;
+      --radius-full: 9999px;
+      --shadow-card: 0 10px 40px -10px rgba(0, 0, 0, 0.5), 0 0 1px 1px rgba(255, 255, 255, 0.05);
+      --shadow-glow: 0 0 35px -5px rgba(13, 148, 136, 0.35);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-font-smoothing: antialiased;
+    }
+
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background: #f5f5f5;
-      height: 100vh;
+      font-family: var(--font-sans);
+      background-color: var(--bg-main);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background-image: 
+        radial-gradient(circle at 15% 15%, rgba(13, 148, 136, 0.15), transparent 45%),
+        radial-gradient(circle at 85% 85%, rgba(6, 182, 212, 0.12), transparent 40%),
+        radial-gradient(circle at 50% 50%, rgba(15, 23, 42, 0.5), transparent 60%);
+      background-attachment: fixed;
+      overflow-x: hidden;
+    }
+
+    /* Ambient background grid */
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background-image: linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+                        linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Top Navigation Bar */
+    .top-nav {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: rgba(6, 9, 17, 0.85);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border-subtle);
+      padding: 14px 24px;
+    }
+
+    .nav-container {
+      max-width: 1400px;
+      margin: 0 auto;
       display: flex;
       align-items: center;
-      justify-content: center;
-    }
-    #app {
-      width: 100%;
-      max-width: 420px;
-      height: 100vh;
-      max-height: 850px;
-      display: flex;
-      flex-direction: column;
-      background: #fff;
-      border-radius: 16px;
-      overflow: hidden;
-      box-shadow: 0 4px 30px rgba(0,0,0,0.12);
-      border: 1px solid #e8e8e8;
+      justify-content: space-between;
+      gap: 16px;
     }
 
-    /* View wrapper: fills the app, holds header + scrollable chat */
-    #view {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      min-height: 0;
-      overflow: hidden;
-    }
-
-    /* Header */
-    .chat-header {
-      background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
-      color: white;
-      padding: 14px 16px;
+    .brand-group {
       display: flex;
       align-items: center;
       gap: 12px;
-      min-height: 64px;
+      text-decoration: none;
+      color: inherit;
     }
-    .chat-header .avatar {
-      width: 44px; height: 44px;
+
+    .brand-icon {
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, var(--primary) 0%, var(--cyan) 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 14px var(--primary-glow);
+      color: white;
+    }
+
+    .brand-icon svg {
+      width: 24px;
+      height: 24px;
+    }
+
+    .brand-text h1 {
+      font-family: var(--font-display);
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+      background: linear-gradient(120deg, #ffffff 40%, #a5f3fc 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .brand-text p {
+      font-size: 12px;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .badge-ai {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 2px 6px;
+      border-radius: var(--radius-full);
+      background: rgba(20, 184, 166, 0.15);
+      color: var(--primary-light);
+      border: 1px solid rgba(20, 184, 166, 0.3);
+    }
+
+    .nav-meta {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .clinic-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      background: var(--bg-surface-subtle);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-full);
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
       border-radius: 50%;
-      background: rgba(255,255,255,0.2);
-      display: flex; align-items: center; justify-content: center;
-      font-size: 22px; color: white; font-weight: 700;
-      backdrop-filter: blur(4px);
-    }
-    .chat-header .info { flex: 1; min-width: 0; }
-    .chat-header .info .name { font-size: 17px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .chat-header .info .status { font-size: 12px; opacity: 0.9; display: flex; align-items: center; gap: 6px; margin-top: 2px; }
-    .chat-header .info .status::before {
-      content: ""; width: 8px; height: 8px; border-radius: 50%;
-      background: #22c55e;
+      background: var(--accent-green);
+      box-shadow: 0 0 10px var(--accent-green);
       animation: pulse-dot 2s infinite;
     }
-    .chat-header .info .status.offline::before { background: #ef4444; animation: none; }
-    @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
-    .header-actions { display: flex; gap: 6px; }
-    .header-actions button {
-      background: rgba(255,255,255,0.15); border: none; color: white; cursor: pointer;
-      font-size: 18px; width: 40px; height: 40px; border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      transition: background 0.2s;
-    }
-    .header-actions button:hover { background: rgba(255,255,255,0.3); }
-    .header-actions button:active { transform: scale(0.95); }
 
-    /* Chat area */
-    .chat-area {
-      flex: 1;
-      min-height: 0;
-      overflow-y: auto;
-      padding: 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      background: #fafafa;
-      background-image: 
-        radial-gradient(circle at 20px 20px, #e8f5e9 2px, transparent 2px),
-        radial-gradient(circle at 60px 60px, #e8f5e9 2px, transparent 2px);
-      background-size: 80px 80px;
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
     }
-    .chat-area::-webkit-scrollbar { width: 6px; }
-    .chat-area::-webkit-scrollbar-track { background: transparent; }
-    .chat-area::-webkit-scrollbar-thumb { background: #c8e6c9; border-radius: 3px; }
-    .chat-area::-webkit-scrollbar-thumb:hover { background: #a5d6a7; }
 
-    .message {
-      max-width: 78%;
-      padding: 10px 14px;
-      border-radius: 16px;
-      font-size: 15px;
-      line-height: 1.5;
-      position: relative;
-      word-wrap: break-word;
-      animation: fadeIn 0.25s ease-out;
-    }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-    .message.user {
-      align-self: flex-end;
-      background: #0d9488;
-      color: white;
-      border-bottom-right-radius: 4px;
-      box-shadow: 0 1px 3px rgba(13,148,136,0.3);
-    }
-    .message.agent {
-      align-self: flex-start;
-      background: #fff;
-      color: #1f2937;
-      border-bottom-left-radius: 4px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-      border: 1px solid #f0f0f0;
-    }
-    .message .time {
-      font-size: 11px;
-      opacity: 0.7;
-      margin-top: 5px;
-      text-align: right;
-      display: block;
-    }
-    .message.user .time { color: rgba(255,255,255,0.8); }
-    .message.agent .time { color: #9ca3af; }
-
-    .system-msg {
-      text-align: center;
+    .live-status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: var(--radius-full);
       font-size: 12px;
-      color: #9ca3af;
-      padding: 6px 0;
-      font-style: italic;
-    }
-
-    /* Typing indicator */
-    .typing-indicator {
-      align-self: flex-start;
-      background: #fff;
-      padding: 10px 16px;
-      border-radius: 16px;
-      border-bottom-left-radius: 4px;
-      font-size: 14px;
-      color: #9ca3af;
-      display: none;
-      border: 1px solid #f0f0f0;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    }
-    .typing-indicator.show { display: block; animation: fadeIn 0.2s ease-out; }
-    .typing-indicator span { display: inline-block; animation: typing 1.4s infinite ease-in-out; }
-    .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
-    .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
-    @keyframes typing { 0%, 80%, 100% { transform: translateY(0); opacity: 0.4; } 40% { transform: translateY(-6px); opacity: 1; } }
-
-    /* Call/Action button */
-    .call-btn {
-      padding: 18px 40px;
-      font-size: 17px;
-      border-radius: 50px;
-      border: none;
-      cursor: pointer;
       font-weight: 600;
-      color: white;
-      background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
-      box-shadow: 0 6px 24px rgba(13,148,136,0.35);
-      transition: transform 0.15s, box-shadow 0.2s;
-      width: 100%;
-      max-width: 280px;
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
+      transition: all 0.25s ease;
     }
-    .call-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
-    .call-btn:not(:disabled):hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(13,148,136,0.4); }
-    .call-btn:not(:disabled):active { transform: translateY(0); }
-    .call-btn.end {
-      background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-      box-shadow: 0 6px 24px rgba(239,68,68,0.35);
-    }
-    .call-btn.end:not(:disabled):hover { box-shadow: 0 10px 30px rgba(239,68,68,0.4); }
 
-    /* Status screens */
-    .status-screen {
+    .live-status-pill.ready {
+      color: var(--primary-light);
+      border-color: rgba(20, 184, 166, 0.3);
+      background: rgba(13, 148, 136, 0.1);
+    }
+
+    .live-status-pill.in-call {
+      color: var(--accent-green);
+      border-color: rgba(16, 185, 129, 0.4);
+      background: rgba(16, 185, 129, 0.12);
+    }
+
+    .live-status-pill.error {
+      color: var(--accent-red);
+      border-color: rgba(239, 68, 68, 0.4);
+      background: rgba(239, 68, 68, 0.1);
+    }
+
+    /* Main Grid Layout */
+    .main-layout {
+      position: relative;
+      z-index: 1;
+      max-width: 1400px;
+      width: 100%;
+      margin: 24px auto;
+      padding: 0 20px 30px;
+      display: grid;
+      grid-template-columns: 1fr 400px;
+      gap: 24px;
       flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 32px 24px;
-      text-align: center;
     }
-    .status-screen .icon {
-      width: 80px; height: 80px; border-radius: 50%;
-      background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
-      display: flex; align-items: center; justify-content: center;
-      font-size: 32px; color: white; margin-bottom: 20px;
-      animation: pulse-ring 2s infinite;
-      box-shadow: 0 0 0 0 rgba(13,148,136,0.4);
-    }
-    @keyframes pulse-ring { 
-      0% { box-shadow: 0 0 0 0 rgba(13,148,136,0.4); }
-      70% { box-shadow: 0 0 0 20px rgba(13,148,136,0); }
-      100% { box-shadow: 0 0 0 0 rgba(13,148,136,0); }
-    }
-    .status-screen .icon.connecting { animation: spin 1s linear infinite; box-shadow: none; }
-    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-    .status-screen .icon.error { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); animation: none; box-shadow: none; }
-    .status-screen h2 { font-size: 20px; font-weight: 600; color: #1f2937; margin-bottom: 8px; }
-    .status-screen p { font-size: 15px; color: #6b7280; margin-bottom: 24px; max-width: 280px; line-height: 1.6; }
-    .status-screen p.error { color: #ef4444; font-weight: 500; }
 
-    /* Empty state for chat */
-    .empty-chat {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 24px;
-      color: #9ca3af;
-      font-size: 14px;
-      text-align: center;
+    @media (max-width: 1080px) {
+      .main-layout {
+        grid-template-columns: 1fr;
+      }
     }
-    .empty-chat svg { width: 64px; height: 64px; margin-bottom: 16px; opacity: 0.6; }
 
-    /* Callback request form on the idle screen */
-    .callback-form {
-      width: 100%;
-      max-width: 300px;
+    /* Stage Container (Left) */
+    .voice-stage {
       display: flex;
       flex-direction: column;
-      gap: 10px;
-      margin-top: 8px;
+      gap: 20px;
     }
-    .callback-form input, .callback-form textarea {
-      width: 100%;
-      padding: 12px 14px;
-      border-radius: 12px;
-      border: 1px solid #e0e0e0;
-      font-size: 15px;
-      font-family: inherit;
-      outline: none;
+
+    .glass-card {
+      background: var(--bg-surface);
+      backdrop-filter: blur(20px);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-card);
+      overflow: hidden;
       transition: border-color 0.2s;
     }
-    .callback-form input:focus, .callback-form textarea:focus { border-color: #0d9488; }
-    .callback-form textarea { resize: vertical; min-height: 70px; }
-    .callback-form .hint { font-size: 12px; color: #9ca3af; text-align: left; margin-top: -4px; }
-    .callback-form .submit-msg { font-size: 14px; color: #0f766e; font-weight: 500; margin-top: 4px; }
-    .callback-form .submit-msg.error { color: #ef4444; }
+
+    .glass-card:hover {
+      border-color: rgba(255, 255, 255, 0.12);
+    }
+
+    /* Clara Voice Stage Card */
+    .clara-stage-card {
+      padding: 28px 32px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .clara-stage-card::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 160px;
+      background: radial-gradient(circle at 50% 0%, rgba(20, 184, 166, 0.2), transparent 70%);
+      pointer-events: none;
+    }
+
+    .agent-header {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+    }
+
+    .agent-profile {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .agent-avatar {
+      position: relative;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--primary) 0%, var(--cyan) 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-display);
+      font-size: 20px;
+      font-weight: 700;
+      color: white;
+      box-shadow: 0 0 20px var(--primary-glow);
+    }
+
+    .agent-avatar::after {
+      content: "";
+      position: absolute;
+      bottom: 0;
+      right: 0;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--accent-green);
+      border: 2px solid var(--bg-main);
+    }
+
+    .agent-meta h2 {
+      font-family: var(--font-display);
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .agent-meta p {
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    .call-timer {
+      font-family: var(--font-display);
+      font-size: 14px;
+      font-weight: 600;
+      padding: 6px 14px;
+      border-radius: var(--radius-full);
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
+      display: none;
+    }
+
+    .call-timer.active {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--accent-green);
+      border-color: rgba(16, 185, 129, 0.3);
+      background: rgba(16, 185, 129, 0.1);
+    }
+
+    /* Voice Orb Stage */
+    .orb-container {
+      position: relative;
+      width: 240px;
+      height: 240px;
+      margin: 10px 0 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .orb-ring {
+      position: absolute;
+      border-radius: 50%;
+      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .orb-ring-3 {
+      width: 230px;
+      height: 230px;
+      background: radial-gradient(circle, rgba(13, 148, 136, 0.08) 0%, transparent 70%);
+      border: 1px dashed rgba(20, 184, 166, 0.2);
+      animation: spin-slow 30s linear infinite;
+    }
+
+    .orb-ring-2 {
+      width: 180px;
+      height: 180px;
+      background: radial-gradient(circle, rgba(6, 182, 212, 0.15) 0%, transparent 65%);
+      border: 1px solid rgba(6, 182, 212, 0.25);
+      animation: pulse-ring 4s ease-in-out infinite alternate;
+    }
+
+    .orb-core {
+      position: relative;
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #0d9488 0%, #06b6d4 50%, #3b82f6 100%);
+      box-shadow: 0 0 50px rgba(13, 148, 136, 0.5), inset 0 0 20px rgba(255, 255, 255, 0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .orb-core:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 65px rgba(20, 184, 166, 0.7);
+    }
+
+    .orb-icon {
+      color: white;
+      transition: transform 0.2s;
+    }
+
+    .orb-icon svg {
+      width: 44px;
+      height: 44px;
+      filter: drop-shadow(0 2px 8px rgba(0,0,0,0.3));
+    }
+
+    /* Orb States */
+    .orb-container.idle .orb-core {
+      animation: breathe 4s ease-in-out infinite;
+    }
+
+    .orb-container.connecting .orb-ring-2 {
+      border-top-color: var(--primary-light);
+      border-right-color: transparent;
+      animation: spin 1s linear infinite;
+    }
+
+    .orb-container.agent-speaking .orb-core {
+      transform: scale(1.12);
+      box-shadow: 0 0 80px rgba(6, 182, 212, 0.8), inset 0 0 30px rgba(255, 255, 255, 0.6);
+      animation: speak-pulse 1.2s ease-in-out infinite alternate;
+    }
+
+    .orb-container.agent-speaking .orb-ring-2 {
+      transform: scale(1.25);
+      border-color: rgba(6, 182, 212, 0.6);
+    }
+
+    .orb-container.user-speaking .orb-core {
+      transform: scale(1.1);
+      box-shadow: 0 0 70px rgba(16, 185, 129, 0.75);
+      background: linear-gradient(135deg, #10b981 0%, #0d9488 100%);
+      animation: speak-pulse 0.9s ease-in-out infinite alternate;
+    }
+
+    @keyframes breathe {
+      0%, 100% { transform: scale(1); box-shadow: 0 0 45px rgba(13, 148, 136, 0.45); }
+      50% { transform: scale(1.04); box-shadow: 0 0 60px rgba(20, 184, 166, 0.65); }
+    }
+
+    @keyframes speak-pulse {
+      0% { transform: scale(1.08); }
+      100% { transform: scale(1.18); }
+    }
+
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes spin-slow {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes pulse-ring {
+      0% { transform: scale(0.95); opacity: 0.6; }
+      100% { transform: scale(1.08); opacity: 1; }
+    }
+
+    /* Audio Spectrum Canvas */
+    .visualizer-box {
+      width: 100%;
+      max-width: 500px;
+      height: 48px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #audio-visualizer-canvas {
+      width: 100%;
+      height: 100%;
+      border-radius: var(--radius-sm);
+    }
+
+    .stage-status-caption {
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      margin-bottom: 24px;
+      text-align: center;
+      min-height: 24px;
+      transition: color 0.2s;
+    }
+
+    .stage-status-caption.active {
+      color: var(--primary-light);
+    }
+
+    /* Controls Bar */
+    .stage-controls {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      width: 100%;
+      max-width: 440px;
+      justify-content: center;
+    }
+
+    .btn-primary-call {
+      flex: 1;
+      padding: 16px 28px;
+      border-radius: var(--radius-full);
+      border: none;
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 50%, var(--cyan) 100%);
+      color: white;
+      font-family: var(--font-sans);
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      box-shadow: var(--shadow-glow);
+      transition: all 0.25s ease;
+    }
+
+    .btn-primary-call:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 0 45px rgba(20, 184, 166, 0.55);
+    }
+
+    .btn-primary-call:active:not(:disabled) {
+      transform: translateY(0);
+    }
+
+    .btn-primary-call:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .btn-primary-call.end-call {
+      background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+      box-shadow: 0 0 35px rgba(239, 68, 68, 0.4);
+    }
+
+    .btn-primary-call.end-call:hover {
+      box-shadow: 0 0 45px rgba(239, 68, 68, 0.6);
+    }
+
+    .btn-secondary-icon {
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: var(--bg-surface-elevated);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-secondary-icon:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .btn-secondary-icon.muted {
+      background: rgba(239, 68, 68, 0.15);
+      border-color: rgba(239, 68, 68, 0.4);
+      color: var(--accent-red);
+    }
+
+    /* Live Transcript Card */
+    .transcript-card {
+      display: flex;
+      flex-direction: column;
+      height: 380px;
+    }
+
+    .transcript-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--bg-surface-subtle);
+    }
+
+    .transcript-header h3 {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .transcript-tools {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .transcript-badge {
+      font-size: 11px;
+      color: var(--text-muted);
+      padding: 3px 8px;
+      border-radius: var(--radius-full);
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border-subtle);
+    }
+
+    .btn-text-sm {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 12px;
+      cursor: pointer;
+      transition: color 0.15s;
+    }
+
+    .btn-text-sm:hover {
+      color: var(--text-primary);
+    }
+
+    .chat-stream {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      scroll-behavior: smooth;
+    }
+
+    .chat-stream::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .chat-stream::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 3px;
+    }
+
+    .empty-stream-state {
+      margin: auto;
+      text-align: center;
+      max-width: 320px;
+      color: var(--text-muted);
+    }
+
+    .empty-stream-state svg {
+      width: 48px;
+      height: 48px;
+      margin-bottom: 12px;
+      opacity: 0.4;
+      color: var(--primary-light);
+    }
+
+    .empty-stream-state p {
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    /* Message Bubbles */
+    .msg-row {
+      display: flex;
+      gap: 10px;
+      animation: msg-in 0.25s ease-out;
+      max-width: 85%;
+    }
+
+    @keyframes msg-in {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .msg-row.agent {
+      align-self: flex-start;
+    }
+
+    .msg-row.user {
+      align-self: flex-end;
+      flex-direction: row-reverse;
+    }
+
+    .msg-avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      flex-shrink: 0;
+      margin-top: 4px;
+    }
+
+    .msg-row.agent .msg-avatar {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--cyan) 100%);
+      color: white;
+    }
+
+    .msg-row.user .msg-avatar {
+      background: var(--bg-surface-elevated);
+      border: 1px solid var(--border-subtle);
+      color: var(--primary-light);
+    }
+
+    .msg-bubble {
+      padding: 12px 16px;
+      border-radius: var(--radius-md);
+      font-size: 14px;
+      line-height: 1.5;
+      position: relative;
+    }
+
+    .msg-row.agent .msg-bubble {
+      background: var(--bg-surface-elevated);
+      color: var(--text-primary);
+      border-bottom-left-radius: 4px;
+      border: 1px solid var(--border-subtle);
+    }
+
+    .msg-row.user .msg-bubble {
+      background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
+      color: white;
+      border-bottom-right-radius: 4px;
+      box-shadow: 0 4px 14px rgba(13, 148, 136, 0.25);
+    }
+
+    .msg-time {
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-top: 4px;
+      text-align: right;
+    }
+
+    .msg-row.user .msg-time {
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    /* Speaking Dots Indicator */
+    .speaking-indicator-row {
+      display: none;
+      align-self: flex-start;
+      gap: 10px;
+      margin-top: 4px;
+    }
+
+    .speaking-indicator-row.show {
+      display: flex;
+    }
+
+    .dots-bubble {
+      padding: 10px 14px;
+      background: var(--bg-surface-elevated);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      display: flex;
+      gap: 5px;
+      align-items: center;
+    }
+
+    .dots-bubble span {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--primary-light);
+      animation: dot-bounce 1.4s infinite ease-in-out;
+    }
+
+    .dots-bubble span:nth-child(2) { animation-delay: 0.2s; }
+    .dots-bubble span:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes dot-bounce {
+      0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+      40% { transform: scale(1); opacity: 1; }
+    }
+
+    /* Right Sidecar Panel */
+    .sidecar-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* Tab navigation for sidecar */
+    .tab-bar {
+      display: flex;
+      padding: 4px;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      gap: 4px;
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 8px 10px;
+      border-radius: var(--radius-sm);
+      border: none;
+      background: transparent;
+      color: var(--text-secondary);
+      font-family: var(--font-sans);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+      text-align: center;
+    }
+
+    .tab-btn.active {
+      background: var(--bg-surface-elevated);
+      color: var(--text-primary);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    /* Appointment Tracker Card */
+    .tracker-card {
+      padding: 20px;
+    }
+
+    .tracker-card h3 {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .status-badge-confirmed {
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: var(--radius-full);
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--accent-green);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .status-badge-pending {
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: var(--radius-full);
+      background: rgba(245, 158, 11, 0.15);
+      color: var(--accent-amber);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+
+    .slot-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border-subtle);
+      font-size: 13px;
+    }
+
+    .slot-row:last-child {
+      border-bottom: none;
+    }
+
+    .slot-label {
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .slot-val {
+      font-weight: 600;
+      color: var(--text-primary);
+      text-align: right;
+    }
+
+    .slot-val.empty {
+      color: var(--text-muted);
+      font-weight: 400;
+    }
+
+    /* Services & Pricing Cards */
+    .services-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 16px;
+    }
+
+    .service-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      background: var(--bg-surface-subtle);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      transition: transform 0.15s, border-color 0.15s;
+    }
+
+    .service-item:hover {
+      transform: translateX(3px);
+      border-color: rgba(20, 184, 166, 0.3);
+    }
+
+    .service-info h4 {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .service-info p {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .service-price {
+      font-family: var(--font-display);
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--primary-light);
+    }
+
+    /* Outbound Call Request Form */
+    .form-card {
+      padding: 22px;
+    }
+
+    .form-card h3 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    .form-card p {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 16px;
+      line-height: 1.5;
+    }
+
+    .form-group {
+      margin-bottom: 12px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+    }
+
+    .form-control {
+      width: 100%;
+      padding: 11px 14px;
+      background: var(--bg-surface-elevated);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      color: var(--text-primary);
+      font-family: inherit;
+      font-size: 14px;
+      outline: none;
+      transition: all 0.2s;
+    }
+
+    .form-control:focus {
+      border-color: var(--primary-light);
+      box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.15);
+    }
+
+    textarea.form-control {
+      resize: vertical;
+      min-height: 70px;
+    }
+
+    .form-hint {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .form-feedback {
+      font-size: 13px;
+      padding: 8px 12px;
+      border-radius: var(--radius-sm);
+      margin-bottom: 12px;
+      display: none;
+    }
+
+    .form-feedback.success {
+      display: block;
+      background: rgba(16, 185, 129, 0.12);
+      color: var(--accent-green);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .form-feedback.error {
+      display: block;
+      background: rgba(239, 68, 68, 0.12);
+      color: var(--accent-red);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .btn-submit-callback {
+      width: 100%;
+      padding: 13px;
+      border-radius: var(--radius-sm);
+      border: none;
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+      color: white;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-submit-callback:hover:not(:disabled) {
+      box-shadow: 0 4px 15px rgba(13, 148, 136, 0.4);
+    }
+
+    .btn-submit-callback:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* Modal / Alert Overlay */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(8px);
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+    }
+
+    .modal-overlay.show {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .modal-card {
+      background: var(--bg-surface-elevated);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 28px;
+      max-width: 400px;
+      width: 90%;
+      text-align: center;
+      box-shadow: var(--shadow-card);
+      transform: scale(0.95);
+      transition: transform 0.2s;
+    }
+
+    .modal-overlay.show .modal-card {
+      transform: scale(1);
+    }
+
+    .modal-card h3 {
+      font-size: 18px;
+      margin-bottom: 8px;
+    }
+
+    .modal-card p {
+      font-size: 14px;
+      color: var(--text-secondary);
+      margin-bottom: 20px;
+      line-height: 1.5;
+    }
+
+    .modal-btn {
+      padding: 10px 24px;
+      border-radius: var(--radius-full);
+      border: none;
+      font-weight: 600;
+      cursor: pointer;
+      background: var(--primary);
+      color: white;
+    }
+
+    /* Footer */
+    .footer-bar {
+      border-top: 1px solid var(--border-subtle);
+      padding: 16px 24px;
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-muted);
+      background: rgba(6, 9, 17, 0.7);
+    }
   </style>
 </head>
 <body>
-  <div id="app">
-    <div id="view"></div>
+
+  <!-- Top Navigation Bar -->
+  <header class="top-nav">
+    <div class="nav-container">
+      <a href="/" class="brand-group" aria-label="Apex Dental Studio Home">
+        <div class="brand-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2c-3.3 0-6 2.7-6 6 0 2.2 1.2 4.1 3 5.1V20a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-6.9c1.8-1 3-2.9 3-5.1 0-3.3-2.7-6-6-6z"/>
+            <path d="M9 10h6"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h1>Apex Dental Studio</h1>
+          <p>
+            <span>Clara AI Receptionist</span>
+            <span class="badge-ai">LiveKit Voice</span>
+          </p>
+        </div>
+      </a>
+
+      <div class="nav-meta">
+        <div class="clinic-badge">
+          <div class="status-dot"></div>
+          <span>Open Today: 9 AM – 6 PM (Dhaka)</span>
+        </div>
+        <div class="live-status-pill ready" id="connection-pill">
+          <span>● Ready</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Grid -->
+  <main class="main-layout">
+
+    <!-- Left Column: Voice Assistant Stage -->
+    <section class="voice-stage">
+      
+      <!-- Clara Live Call Stage Card -->
+      <div class="glass-card clara-stage-card">
+        
+        <div class="agent-header">
+          <div class="agent-profile">
+            <div class="agent-avatar">C</div>
+            <div class="agent-meta">
+              <h2>Clara</h2>
+              <p id="agent-subtitle">Dental Booking Assistant</p>
+            </div>
+          </div>
+          <div class="call-timer" id="call-timer">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <span id="call-timer-text">00:00</span>
+          </div>
+        </div>
+
+        <!-- Interactive Voice Orb -->
+        <div class="orb-container idle" id="voice-orb" title="Clara Voice Agent">
+          <div class="orb-ring orb-ring-3"></div>
+          <div class="orb-ring orb-ring-2"></div>
+          <div class="orb-core" id="orb-core-btn">
+            <div class="orb-icon" id="orb-icon">
+              <!-- Mic / Soundwave SVG -->
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                <line x1="12" y1="19" x2="12" y2="23"></line>
+                <line x1="8" y1="23" x2="16" y2="23"></line>
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <!-- Real-Time Audio Frequency Visualizer Canvas -->
+        <div class="visualizer-box">
+          <canvas id="audio-visualizer-canvas"></canvas>
+        </div>
+
+        <!-- Status Caption -->
+        <div class="stage-status-caption" id="stage-status-caption">
+          Click below to start a real-time voice call with Clara
+        </div>
+
+        <!-- Controls Action Bar -->
+        <div class="stage-controls">
+          <button class="btn-primary-call" id="btn-call-action">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+            </svg>
+            <span id="btn-call-label">Start Voice Call</span>
+          </button>
+
+          <!-- Microphone Mute Toggle -->
+          <button class="btn-secondary-icon" id="btn-mic-toggle" title="Mute Microphone" style="display: none;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+              <line x1="12" y1="19" x2="12" y2="23"></line>
+              <line x1="8" y1="23" x2="16" y2="23"></line>
+            </svg>
+          </button>
+        </div>
+
+      </div>
+
+      <!-- Live Transcript Feed Card -->
+      <div class="glass-card transcript-card">
+        <div class="transcript-header">
+          <h3>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+            <span>Live Conversation Transcript</span>
+          </h3>
+          <div class="transcript-tools">
+            <span class="transcript-badge">WebSocket Synced</span>
+            <button class="btn-text-sm" id="btn-clear-transcript">Clear</button>
+          </div>
+        </div>
+
+        <div class="chat-stream" id="chat-stream">
+          <div class="empty-stream-state" id="empty-stream-state">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M12 18.5a6.5 6.5 0 1 0 0-13 6.5 6.5 0 0 0 0 13Z"/>
+              <path d="M12 14v-4"/>
+              <path d="M12 8h.01"/>
+            </svg>
+            <p>Your conversation with Clara will be transcribed here in real time as you speak.</p>
+          </div>
+
+          <!-- Typing Indicator -->
+          <div class="speaking-indicator-row" id="speaking-indicator-row">
+            <div class="msg-avatar" style="background: linear-gradient(135deg, var(--primary) 0%, var(--cyan) 100%); color:white;">C</div>
+            <div class="dots-bubble">
+              <span></span><span></span><span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- Right Column: Sidecar (Live Booking Tracker, Services, Call-Back) -->
+    <aside class="sidecar-panel">
+      
+      <!-- Tab Navigation Switcher -->
+      <div class="tab-bar">
+        <button class="tab-btn active" data-tab="tab-booking">Appointment</button>
+        <button class="tab-btn" data-tab="tab-services">Services & Rates</button>
+        <button class="tab-btn" data-tab="tab-callback">Request Call</button>
+      </div>
+
+      <!-- Tab 1: Live Booking Tracker Card -->
+      <div class="tab-content active" id="tab-booking">
+        <div class="glass-card tracker-card">
+          <h3>
+            <span>Appointment Details</span>
+            <span class="status-badge-pending" id="booking-status-badge">In Progress</span>
+          </h3>
+
+          <div class="slot-row">
+            <span class="slot-label">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              Patient Name
+            </span>
+            <span class="slot-val empty" id="slot-name">—</span>
+          </div>
+
+          <div class="slot-row">
+            <span class="slot-label">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+              Phone Number
+            </span>
+            <span class="slot-val empty" id="slot-phone">—</span>
+          </div>
+
+          <div class="slot-row">
+            <span class="slot-label">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+              Treatment
+            </span>
+            <span class="slot-val empty" id="slot-service">—</span>
+          </div>
+
+          <div class="slot-row">
+            <span class="slot-label">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              Scheduled Time
+            </span>
+            <span class="slot-val empty" id="slot-time">—</span>
+          </div>
+
+          <div class="slot-row">
+            <span class="slot-label">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              Booking Ref
+            </span>
+            <span class="slot-val empty" id="slot-ref">—</span>
+          </div>
+
+          <div style="margin-top: 16px; padding: 12px; background: var(--bg-surface-subtle); border-radius: var(--radius-sm); font-size: 12px; color: var(--text-secondary); line-height: 1.5;">
+            💡 <strong>How it works:</strong> Clara automatically extracts your details as you speak them and checks the clinic calendar in real time.
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 2: Services & Pricing -->
+      <div class="tab-content" id="tab-services">
+        <div class="glass-card">
+          <div class="services-list">
+            <div class="service-item">
+              <div class="service-info">
+                <h4>Teeth Cleaning</h4>
+                <p>Ultrasonic scaling & polishing (45 min)</p>
+              </div>
+              <div class="service-price">$50</div>
+            </div>
+
+            <div class="service-item">
+              <div class="service-info">
+                <h4>Teeth Whitening</h4>
+                <p>In-office ADA-approved whitening (60 min)</p>
+              </div>
+              <div class="service-price">$120</div>
+            </div>
+
+            <div class="service-item">
+              <div class="service-info">
+                <h4>Dental Checkup</h4>
+                <p>Full oral exam & basic digital X-rays</p>
+              </div>
+              <div class="service-price">$30</div>
+            </div>
+
+            <div class="service-item">
+              <div class="service-info">
+                <h4>Composite Filling</h4>
+                <p>Natural tooth-colored resin</p>
+              </div>
+              <div class="service-price">$80+</div>
+            </div>
+
+            <div class="service-item">
+              <div class="service-info">
+                <h4>Root Canal</h4>
+                <p>Comfortable therapy under local anesthesia</p>
+              </div>
+              <div class="service-price">$300+</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 3: Request Call Back Form -->
+      <div class="tab-content" id="tab-callback">
+        <div class="glass-card form-card">
+          <h3>Request a Phone Call</h3>
+          <p>Leave your number and Clara will dial your phone directly to schedule your visit.</p>
+
+          <div id="cb-feedback" class="form-feedback"></div>
+
+          <form id="callback-form" onsubmit="handleCallbackSubmit(event)">
+            <div class="form-group">
+              <label for="cb-name">Your Full Name</label>
+              <input type="text" id="cb-name" class="form-control" placeholder="e.g. Akash Rahman" autocomplete="name" />
+            </div>
+
+            <div class="form-group">
+              <label for="cb-phone">Phone Number *</label>
+              <input type="tel" id="cb-phone" class="form-control" placeholder="+8801712345678" required autocomplete="tel" />
+              <div class="form-hint">Format with country code (e.g. +880...)</div>
+            </div>
+
+            <div class="form-group">
+              <label for="cb-purpose">Reason for Visit</label>
+              <textarea id="cb-purpose" class="form-control" placeholder="e.g. Toothache, routine cleaning, checkup"></textarea>
+            </div>
+
+            <button type="submit" class="btn-submit-callback" id="btn-submit-callback">
+              Request Instant Call Back
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <!-- Quick Clinic Info Card -->
+      <div class="glass-card" style="padding: 16px 20px;">
+        <div style="font-size: 13px; color: var(--text-secondary); display: flex; flex-direction: column; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            <span>123 Main Street, Dhaka Plaza, Suite 101</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <span>Mon–Fri: 9am–6pm | Sat: 10am–4pm</span>
+          </div>
+        </div>
+      </div>
+
+    </aside>
+
+  </main>
+
+  <!-- Global Modal Dialog (Microphone / Network error) -->
+  <div class="modal-overlay" id="global-modal">
+    <div class="modal-card">
+      <h3 id="modal-title">Notice</h3>
+      <p id="modal-desc"></p>
+      <button class="modal-btn" onclick="closeModal()">Understood</button>
+    </div>
   </div>
 
+  <!-- Footer -->
+  <footer class="footer-bar">
+    Apex Dental Studio &copy; 2026. Built with LiveKit WebRTC, Pipecat, faster-whisper, Kokoro TTS & Groq LLaMA 3.1.
+  </footer>
+
+  <!-- Application Logic -->
   <script>
     const { Room, RoomEvent, Track } = LivekitClient;
+
     const API_BASE = (window.__API_BASE__ || "").replace(/\/$/, "");
     const WS_BASE = API_BASE.replace(/^http/, "ws") || (location.protocol === "https:" ? "wss://" : "ws://") + location.host;
+
+    // State Variables
     let room = null;
-    let audioEls = [];
     let ws = null;
+    let audioEls = [];
     let sessionId = null;
+    let isCallActive = false;
+    let isMuted = false;
+    let callTimerInterval = null;
+    let callSeconds = 0;
 
-    function el(tag, className, text) {
-      const e = document.createElement(tag);
-      if (className) e.className = className;
-      if (text !== undefined) e.textContent = text;
-      return e;
+    // Web Audio Visualizer state
+    let audioCtx = null;
+    let analyser = null;
+    let visualizerAnimationId = null;
+    const canvas = document.getElementById("audio-visualizer-canvas");
+    const ctx = canvas.getContext("2d");
+
+    // Resize Canvas for Retina Crispness
+    function resizeCanvas() {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      ctx.scale(dpr, dpr);
     }
+    window.addEventListener("resize", resizeCanvas);
+    resizeCanvas();
 
-    function timeStr() {
+    // Tab Navigation Logic
+    document.querySelectorAll(".tab-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+        document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
+        btn.classList.add("active");
+        const target = document.getElementById(btn.dataset.tab);
+        if (target) target.classList.add("active");
+      });
+    });
+
+    // Formatting timestamp
+    function formatTime() {
       const d = new Date();
       return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     }
 
-    function addMessage(speaker, text) {
-      const chatArea = document.getElementById("chat-area");
-      if (!chatArea) return;
+    // Modal Display
+    function showModal(title, text) {
+      document.getElementById("modal-title").textContent = title;
+      document.getElementById("modal-desc").textContent = text;
+      document.getElementById("global-modal").classList.add("show");
+    }
+
+    function closeModal() {
+      document.getElementById("global-modal").classList.remove("show");
+    }
+
+    // Call Duration Timer
+    function startCallTimer() {
+      callSeconds = 0;
+      const timerEl = document.getElementById("call-timer");
+      const textEl = document.getElementById("call-timer-text");
+      timerEl.classList.add("active");
+      textEl.textContent = "00:00";
+      clearInterval(callTimerInterval);
+      callTimerInterval = setInterval(() => {
+        callSeconds++;
+        const mins = String(Math.floor(callSeconds / 60)).padStart(2, "0");
+        const secs = String(callSeconds % 60).padStart(2, "0");
+        textEl.textContent = `${mins}:${secs}`;
+      }, 1000);
+    }
+
+    function stopCallTimer() {
+      clearInterval(callTimerInterval);
+      document.getElementById("call-timer").classList.remove("active");
+    }
+
+    // Update UI Connection State
+    function updateConnectionStatus(state, label) {
+      const pill = document.getElementById("connection-pill");
+      pill.className = `live-status-pill ${state}`;
+      pill.innerHTML = `<span>● ${label}</span>`;
+    }
+
+    // Add message to chat stream
+    function appendMessage(speaker, text) {
+      const stream = document.getElementById("chat-stream");
+      const empty = document.getElementById("empty-stream-state");
+      if (empty) empty.style.display = "none";
+
+      const row = document.createElement("div");
+      row.className = `msg-row ${speaker}`;
+
+      const avatar = document.createElement("div");
+      avatar.className = "msg-avatar";
+      avatar.textContent = speaker === "agent" ? "C" : "You";
+
+      const bubbleWrapper = document.createElement("div");
+      const bubble = document.createElement("div");
+      bubble.className = "msg-bubble";
+      bubble.textContent = text;
+
+      const time = document.createElement("div");
+      time.className = "msg-time";
+      time.textContent = formatTime();
+
+      bubbleWrapper.appendChild(bubble);
+      bubbleWrapper.appendChild(time);
+      row.appendChild(avatar);
+      row.appendChild(bubbleWrapper);
+
+      // Insert before speaking indicator
+      const indicator = document.getElementById("speaking-indicator-row");
+      stream.insertBefore(row, indicator);
+      stream.scrollTop = stream.scrollHeight;
+
+      // Extract details for booking tracker sidecar
+      parseAndTrackBookingDetails(speaker, text);
+    }
+
+    // Heuristic slot extractor to update the Live Booking Tracker in the UI
+    function parseAndTrackBookingDetails(speaker, text) {
+      const textLower = text.toLowerCase();
       
-      // Remove empty state if present
-      const emptyState = chatArea.querySelector(".empty-chat");
-      if (emptyState) emptyState.remove();
-
-      const msg = el("div", "message " + speaker);
-      const textEl = el("span", "", text);
-      const timeEl = el("div", "time", timeStr());
-      msg.appendChild(textEl);
-      msg.appendChild(timeEl);
-      chatArea.appendChild(msg);
-      chatArea.scrollTop = chatArea.scrollHeight;
-    }
-
-    function addSystemMessage(text) {
-      const chatArea = document.getElementById("chat-area");
-      if (!chatArea) return;
-      const msg = el("div", "system-msg", text);
-      chatArea.appendChild(msg);
-      chatArea.scrollTop = chatArea.scrollHeight;
-    }
-
-    function showTyping(show) {
-      const typing = document.getElementById("typing-indicator");
-      if (typing) typing.classList.toggle("show", show);
-    }
-
-    function renderEmptyChat() {
-      const chatArea = document.getElementById("chat-area");
-      if (!chatArea) return;
-      chatArea.innerHTML = `
-        <div class="empty-chat">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-          </svg>
-          <p>No messages yet. Start the conversation!</p>
-        </div>
-      `;
-    }
-
-    function renderIdle() {
-      const v = document.getElementById("view");
-      v.innerHTML = "";
-      const wrapper = el("div", "status-screen");
-      wrapper.innerHTML = `
-        <div class="icon">🦷</div>
-        <h2>Welcome to Dental Clinic</h2>
-        <p>Click below to start a voice call with Clara, our booking assistant, or leave your number and she will call you back.</p>
-        <button class="call-btn" id="btn-start">Start Call</button>
-        <div class="callback-form">
-          <div style="display:flex;align-items:center;gap:10px;margin:8px 0 2px;">
-            <span style="flex:1;height:1px;background:#e5e7eb;"></span>
-            <span style="font-size:12px;color:#9ca3af;letter-spacing:0.5px;">OR REQUEST A CALL BACK</span>
-            <span style="flex:1;height:1px;background:#e5e7eb;"></span>
-          </div>
-          <input type="text" id="cb-name" placeholder="Your name (optional)" autocomplete="name" />
-          <input type="tel" id="cb-phone" placeholder="Phone, e.g. +8801712345678" autocomplete="tel" />
-          <textarea id="cb-purpose" placeholder="What is this about? e.g. tooth pain, checkup"></textarea>
-          <div class="hint">We will call you back and help you book.</div>
-          <div id="cb-msg" class="submit-msg"></div>
-          <button class="call-btn" id="btn-callback" style="font-size:15px;padding:14px 24px;">Request Call Back</button>
-        </div>
-      `;
-      v.appendChild(wrapper);
-      document.getElementById("btn-start").onclick = startCall;
-      document.getElementById("btn-callback").onclick = submitCallBack;
-    }
-
-    async function submitCallBack() {
-      const btn = document.getElementById("btn-callback");
-      const msg = document.getElementById("cb-msg");
-      const phone = document.getElementById("cb-phone").value.trim();
-      const name = document.getElementById("cb-name").value.trim();
-      const purpose = document.getElementById("cb-purpose").value.trim();
-      if (!phone) {
-        msg.textContent = "Please enter your phone number.";
-        msg.className = "submit-msg error";
-        return;
-      }
-      btn.disabled = true;
-      btn.textContent = "Submitting...";
-      msg.textContent = "";
-      try {
-        const res = await fetch(`${API_BASE}/api/v1/leads`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ customer_name: name, phone, purpose }),
-        });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          msg.textContent = (err.detail && typeof err.detail === "string") ? err.detail : "Could not save your request. Please try again.";
-          msg.className = "submit-msg error";
-          btn.disabled = false;
-          btn.textContent = "Request Call Back";
-          return;
+      // Name detection
+      if (speaker === "user" && !document.getElementById("slot-name").dataset.filled) {
+        const nameMatch = text.match(/(?:my name is|i am|i'm|this is)\s+([A-Za-z]+)/i);
+        if (nameMatch && nameMatch[1]) {
+          setSlot("slot-name", nameMatch[1]);
         }
-        msg.textContent = "Got it! Clara will call you back shortly.";
-        msg.className = "submit-msg";
-        btn.textContent = "Request Another";
-        btn.disabled = false;
-        document.getElementById("cb-phone").value = "";
-        document.getElementById("cb-purpose").value = "";
-      } catch (e) {
-        msg.textContent = "Network error. Please try again.";
-        msg.className = "submit-msg error";
-        btn.disabled = false;
-        btn.textContent = "Request Call Back";
+      }
+
+      // Phone detection
+      const phoneMatch = text.match(/(\+?\d{7,15})/);
+      if (phoneMatch) {
+        setSlot("slot-phone", phoneMatch[1]);
+      }
+
+      // Service detection
+      const services = ["cleaning", "whitening", "checkup", "filling", "root canal", "extraction", "crown", "implant", "braces"];
+      for (const s of services) {
+        if (textLower.includes(s)) {
+          const capitalized = s.charAt(0).toUpperCase() + s.slice(1);
+          setSlot("slot-service", capitalized);
+          break;
+        }
+      }
+
+      // Time / slot detection
+      const timeMatch = text.match(/(tomorrow|today|monday|tuesday|wednesday|thursday|friday|saturday|\d{1,2}\s*(?:am|pm))/i);
+      if (timeMatch && (speaker === "agent" && (textLower.includes("book") || textLower.includes("confirmed") || textLower.includes("at")))) {
+        setSlot("slot-time", timeMatch[0]);
+      }
+
+      // Confirmation detection
+      if (textLower.includes("confirmed") || textLower.includes("all set") || textLower.includes("booking-")) {
+        const badge = document.getElementById("booking-status-badge");
+        badge.textContent = "Confirmed ✓";
+        badge.className = "status-badge-confirmed";
+
+        const refMatch = text.match(/(booking-[a-zA-Z0-9_-]+)/);
+        if (refMatch) {
+          setSlot("slot-ref", refMatch[1]);
+        } else {
+          setSlot("slot-ref", "BK-" + Math.floor(100000 + Math.random() * 900000));
+        }
       }
     }
 
-    function renderConnecting(message) {
-      const v = document.getElementById("view");
-      v.innerHTML = "";
-      const wrapper = el("div", "status-screen");
-      wrapper.innerHTML = `
-        <div class="icon connecting">⏳</div>
-        <h2>Connecting...</h2>
-        <p>${escapeHtml(message)}</p>
-      `;
-      v.appendChild(wrapper);
+    function setSlot(id, value) {
+      const el = document.getElementById(id);
+      if (el) {
+        el.textContent = value;
+        el.classList.remove("empty");
+        el.dataset.filled = "true";
+      }
     }
 
-    function renderChat() {
-      const v = document.getElementById("view");
-      v.innerHTML = "";
-
-      const header = el("div", "chat-header");
-      header.innerHTML = `
-        <div class="avatar">C</div>
-        <div class="info">
-          <div class="name">Clara</div>
-          <div class="status" id="header-status">connecting...</div>
-        </div>
-        <div class="header-actions">
-          <button id="btn-end" title="End call" aria-label="End call">📞</button>
-        </div>
-      `;
-      v.appendChild(header);
-
-      const chatArea = el("div", "chat-area");
-      chatArea.id = "chat-area";
-      v.appendChild(chatArea);
-      
-      // Show empty state initially
-      renderEmptyChat();
-
-      const typing = el("div", "typing-indicator", "<span>.</span><span>.</span><span>.</span>");
-      typing.id = "typing-indicator";
-      typing.innerHTML = "<span>.</span><span>.</span><span>.</span>";
-      v.appendChild(typing);
-
-      document.getElementById("btn-end").onclick = endCall;
+    function clearTranscript() {
+      const stream = document.getElementById("chat-stream");
+      const empty = document.getElementById("empty-stream-state");
+      // Keep only empty state and speaking indicator
+      stream.querySelectorAll(".msg-row").forEach(el => el.remove());
+      if (empty) empty.style.display = "block";
     }
+    document.getElementById("btn-clear-transcript").addEventListener("click", clearTranscript);
 
-    function renderError(msg) {
-      const v = document.getElementById("view");
-      v.innerHTML = "";
-      const wrapper = el("div", "status-screen");
-      wrapper.innerHTML = `
-        <div class="icon error">✕</div>
-        <h2>Connection Error</h2>
-        <p class="error">${escapeHtml(msg)}</p>
-        <button class="call-btn" id="btn-retry">Try Again</button>
-      `;
-      v.appendChild(wrapper);
-      document.getElementById("btn-retry").onclick = renderIdle;
+    // Audio Visualizer Wave Canvas Animation
+    function startVisualizerAnimation() {
+      cancelAnimationFrame(visualizerAnimationId);
+      const bufferLength = analyser ? analyser.frequencyBinCount : 32;
+      const dataArray = analyser ? new Uint8Array(bufferLength) : null;
+
+      function renderFrame() {
+        visualizerAnimationId = requestAnimationFrame(renderFrame);
+        const w = canvas.getBoundingClientRect().width;
+        const h = canvas.getBoundingClientRect().height;
+        ctx.clearRect(0, 0, w, h);
+
+        if (analyser && isCallActive) {
+          analyser.getByteFrequencyData(dataArray);
+          const barWidth = (w / bufferLength) * 2;
+          let x = 0;
+
+          for (let i = 0; i < bufferLength; i++) {
+            const barHeight = Math.max(3, (dataArray[i] / 255) * (h - 6));
+            const grad = ctx.createLinearGradient(0, h, 0, 0);
+            grad.addColorStop(0, "rgba(13, 148, 136, 0.3)");
+            grad.addColorStop(1, "rgba(6, 182, 212, 0.9)");
+
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.roundRect(x, (h - barHeight) / 2, barWidth - 2, barHeight, 2);
+            ctx.fill();
+            x += barWidth;
+          }
+        } else {
+          // Ambient gentle wave when idle or connecting
+          const time = Date.now() * 0.003;
+          ctx.beginPath();
+          ctx.strokeStyle = "rgba(20, 184, 166, 0.25)";
+          ctx.lineWidth = 2;
+          for (let x = 0; x < w; x++) {
+            const y = (h / 2) + Math.sin(x * 0.03 + time) * 4;
+            if (x === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          }
+          ctx.stroke();
+        }
+      }
+      renderFrame();
     }
+    startVisualizerAnimation();
 
-    function renderEnded() {
-      const v = document.getElementById("view");
-      v.innerHTML = "";
-      const wrapper = el("div", "status-screen");
-      wrapper.innerHTML = `
-        <div class="icon" style="background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);">✓</div>
-        <h2>Call Ended</h2>
-        <p>Your conversation has ended. You can start a new call anytime.</p>
-        <button class="call-btn" id="btn-new">New Call</button>
-      `;
-      v.appendChild(wrapper);
-      document.getElementById("btn-new").onclick = renderIdle;
-    }
-
-    function escapeHtml(text) {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
-    }
-
+    // WebSocket Transcript Link
     function connectWebSocket() {
       if (!sessionId) return;
       const wsUrl = `${WS_BASE}/ws/transcript/${sessionId}`;
-      console.log("Connecting to WebSocket:", wsUrl);
+      console.log("Opening transcript WebSocket:", wsUrl);
       ws = new WebSocket(wsUrl);
+
       ws.onopen = () => {
-        console.log("WebSocket connected");
-        const statusEl = document.getElementById("header-status");
-        if (statusEl) { statusEl.textContent = "online"; statusEl.className = "status online"; }
+        console.log("WebSocket stream connected");
+        updateConnectionStatus("in-call", "Call Active");
       };
-      ws.onmessage = (event) => {
+
+      ws.onmessage = (evt) => {
         try {
-          const data = JSON.parse(event.data);
-          if (data.type === "transcript") {
-            addMessage(data.speaker, data.text);
-          } else if (data.type === "agent_text") {
-            addMessage("agent", data.text);
+          const data = JSON.parse(evt.data);
+          if (data.type === "transcript" || data.type === "agent_text") {
+            appendMessage(data.speaker || "agent", data.text);
           }
-        } catch (e) {
-          console.error("WebSocket message parse error:", e);
+        } catch (err) {
+          console.error("Error parsing WS transcript:", err);
         }
       };
+
       ws.onclose = () => {
-        console.log("WebSocket disconnected");
-        const statusEl = document.getElementById("header-status");
-        if (statusEl) { statusEl.textContent = "offline"; statusEl.className = "status offline"; }
-        // Try to reconnect after 3 seconds
-        setTimeout(() => {
-          if (sessionId && (!ws || ws.readyState === WebSocket.CLOSED)) {
-            connectWebSocket();
-          }
-        }, 3000);
-      };
-      ws.onerror = (err) => {
-        console.error("WebSocket error:", err);
+        console.log("WebSocket stream closed");
+        if (isCallActive) {
+          setTimeout(() => {
+            if (sessionId && isCallActive && (!ws || ws.readyState === WebSocket.CLOSED)) {
+              connectWebSocket();
+            }
+          }, 2500);
+        }
       };
     }
 
     function disconnectWebSocket() {
-      if (ws) { ws.onclose = null; ws.close(); ws = null; }
+      if (ws) {
+        ws.onclose = null;
+        ws.close();
+        ws = null;
+      }
     }
 
-    async function startCall() {
-      renderConnecting("Requesting microphone permission...");
+    // Set Orb State
+    function setOrbState(state, caption) {
+      const orb = document.getElementById("voice-orb");
+      orb.className = `orb-container ${state}`;
+      const cap = document.getElementById("stage-status-caption");
+      cap.textContent = caption;
+      cap.classList.toggle("active", state !== "idle");
+
+      const indicator = document.getElementById("speaking-indicator-row");
+      indicator.classList.toggle("show", state === "agent-speaking");
+    }
+
+    // Start Real-Time Voice Call
+    async function startVoiceCall() {
+      const btnCall = document.getElementById("btn-call-action");
+      btnCall.disabled = true;
+      setOrbState("connecting", "Requesting microphone authorization...");
+      updateConnectionStatus("ready", "Requesting Mic...");
+
       try {
         await navigator.mediaDevices.getUserMedia({ audio: true });
       } catch (err) {
-        console.error("Mic permission error:", err);
-        renderError("Microphone access was blocked. Please allow mic access in your browser settings and try again.");
+        console.error("Mic access denied:", err);
+        btnCall.disabled = false;
+        setOrbState("idle", "Microphone access blocked. Please enable permissions.");
+        updateConnectionStatus("error", "Mic Blocked");
+        showModal("Microphone Required", "Please allow microphone access in your browser settings so Clara can hear and answer your voice questions.");
         return;
       }
 
-      renderConnecting("Creating call room...");
+      setOrbState("connecting", "Initializing secure WebRTC voice room...");
+      updateConnectionStatus("ready", "Connecting...");
+
       try {
         const res = await fetch(`${API_BASE}/api/v1/calls/room`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({}),
         });
-        if (!res.ok) throw new Error("Failed to create room: " + res.statusText);
+
+        if (!res.ok) throw new Error("Server returned " + res.status);
         const data = await res.json();
         sessionId = data.session_id;
 
-        renderChat();
+        // Start WebSocket for real-time live captions
         connectWebSocket();
 
+        // Initialize LiveKit Client Room
         room = new Room();
+
         room.on(RoomEvent.Connected, () => {
-          const statusEl = document.getElementById("header-status");
-          if (statusEl) { statusEl.textContent = "online"; statusEl.className = "status online"; }
+          isCallActive = true;
+          btnCall.disabled = false;
+          btnCall.classList.add("end-call");
+          document.getElementById("btn-call-label").textContent = "End Call";
+          document.getElementById("btn-mic-toggle").style.display = "flex";
+          startCallTimer();
+          setOrbState("idle", "Connected. Speak to Clara to book or ask questions.");
+          updateConnectionStatus("in-call", "Call Active");
         });
-        room.on(RoomEvent.Disconnected, () => { endCall(); renderEnded(); });
-        room.on(RoomEvent.ConnectionStateChanged, (state) => {
-          if (state === "disconnected") { endCall(); renderEnded(); }
+
+        room.on(RoomEvent.Disconnected, () => {
+          endVoiceCall();
         });
+
         room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
           if (track.kind === Track.Kind.Audio && participant) {
             const audioEl = track.attach();
             audioEl.autoplay = true;
             document.body.appendChild(audioEl);
             audioEls.push(audioEl);
+
+            // Connect track to Web Audio analyser
+            try {
+              if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+              if (audioCtx.state === "suspended") audioCtx.resume();
+              const stream = track.mediaStream || new MediaStream([track.mediaStreamTrack]);
+              const src = audioCtx.createMediaStreamSource(stream);
+              analyser = audioCtx.createAnalyser();
+              analyser.fftSize = 64;
+              src.connect(analyser);
+            } catch (e) {
+              console.warn("Visualizer Web Audio setup error:", e);
+            }
+
             audioEl.play().catch(() => {
-              const unlock = () => { audioEl.play(); window.removeEventListener("click", unlock); window.removeEventListener("keydown", unlock); };
+              const unlock = () => { audioEl.play(); window.removeEventListener("click", unlock); };
               window.addEventListener("click", unlock);
-              window.addEventListener("keydown", unlock);
             });
           }
         });
+
         room.on(RoomEvent.TrackUnsubscribed, (track) => {
-          const a = track.detach()[0];
-          if (a) a.remove();
+          const attached = track.detach();
+          attached.forEach(el => el.remove());
         });
+
+        // Speaker reactivity
         room.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
-          const active = speakers.filter((s) => s.isSpeaking);
-          const agent = active.some((s) => s.identity === "agent");
-          const user = active.some((s) => s.identity !== "agent");
-          const statusEl = document.getElementById("header-status");
-          if (statusEl) {
-            statusEl.textContent = agent ? "Clara is speaking..." : user ? "You are speaking..." : "online";
-            statusEl.className = "status " + (agent || user ? "online" : "online");
+          if (!isCallActive) return;
+          const active = speakers.filter(s => s.isSpeaking);
+          const isAgent = active.some(s => s.identity === "agent");
+          const isUser = active.some(s => s.identity !== "agent");
+
+          if (isAgent) {
+            setOrbState("agent-speaking", "Clara is speaking...");
+          } else if (isUser) {
+            setOrbState("user-speaking", "Listening to you...");
+          } else {
+            setOrbState("idle", "Listening...");
           }
-        });
-        room.on(RoomEvent.MediaDevicesError, (error) => {
-          console.error("MediaDevicesError:", error);
         });
 
         await room.connect(data.ws_url, data.browser_token);
         await room.startAudio();
         await room.localParticipant.setMicrophoneEnabled(true);
+
       } catch (err) {
-        const msg = err instanceof Error ? err.message : "Unknown error";
-        console.error("Call error:", err);
-        if (room) { room.disconnect(); room = null; }
-        disconnectWebSocket();
-        renderError(msg);
+        console.error("Call initialization failed:", err);
+        btnCall.disabled = false;
+        setOrbState("idle", "Failed to connect. Please try again.");
+        updateConnectionStatus("error", "Connection Error");
+        showModal("Connection Error", "Could not establish a connection with the voice server. Please check your internet connection or verify the server is running.");
+        endVoiceCall();
       }
     }
 
-    function endCall() {
-      if (room) { room.disconnect(); room = null; }
+    // End Voice Call
+    function endVoiceCall() {
+      isCallActive = false;
+      stopCallTimer();
       disconnectWebSocket();
-      audioEls.forEach((a) => a.remove());
+
+      if (room) {
+        room.disconnect();
+        room = null;
+      }
+
+      audioEls.forEach(a => a.remove());
       audioEls = [];
       sessionId = null;
+      analyser = null;
+
+      const btnCall = document.getElementById("btn-call-action");
+      btnCall.classList.remove("end-call");
+      btnCall.disabled = false;
+      document.getElementById("btn-call-label").textContent = "Start Voice Call";
+      document.getElementById("btn-mic-toggle").style.display = "none";
+
+      setOrbState("idle", "Call ended. Click 'Start Voice Call' to begin a new session.");
+      updateConnectionStatus("ready", "Ready");
     }
 
-    renderIdle();
+    // Toggle Microphone Mute
+    async function toggleMute() {
+      if (!room || !room.localParticipant) return;
+      isMuted = !isMuted;
+      await room.localParticipant.setMicrophoneEnabled(!isMuted);
+      const btn = document.getElementById("btn-mic-toggle");
+      btn.classList.toggle("muted", isMuted);
+      btn.title = isMuted ? "Unmute Microphone" : "Mute Microphone";
+    }
+    document.getElementById("btn-mic-toggle").addEventListener("click", toggleMute);
+
+    // Call Button Trigger
+    document.getElementById("btn-call-action").addEventListener("click", () => {
+      if (isCallActive) {
+        endVoiceCall();
+      } else {
+        startVoiceCall();
+      }
+    });
+
+    // Core Orb Click Trigger
+    document.getElementById("orb-core-btn").addEventListener("click", () => {
+      if (!isCallActive) {
+        startVoiceCall();
+      }
+    });
+
+    // Callback Request Handler
+    async function handleCallbackSubmit(e) {
+      e.preventDefault();
+      const btn = document.getElementById("btn-submit-callback");
+      const feedback = document.getElementById("cb-feedback");
+      const name = document.getElementById("cb-name").value.trim();
+      const phone = document.getElementById("cb-phone").value.trim();
+      const purpose = document.getElementById("cb-purpose").value.trim();
+
+      if (!phone) {
+        feedback.textContent = "Please enter a valid telephone number.";
+        feedback.className = "form-feedback error";
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = "Scheduling Outbound Call...";
+      feedback.style.display = "none";
+
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/leads`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ customer_name: name, phone: phone, purpose: purpose }),
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || "Unable to register call request.");
+        }
+
+        feedback.textContent = "Success! Your request has been queued. Clara will dial you shortly.";
+        feedback.className = "form-feedback success";
+        document.getElementById("callback-form").reset();
+        btn.textContent = "Request Call Back";
+        btn.disabled = false;
+      } catch (err) {
+        feedback.textContent = err.message || "Failed to submit request. Please try again.";
+        feedback.className = "form-feedback error";
+        btn.disabled = false;
+        btn.textContent = "Request Call Back";
+      }
+    }
   </script>
 </body>
 </html>
